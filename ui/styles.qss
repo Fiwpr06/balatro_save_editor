@@ -1,0 +1,255 @@
+/* Balatro Remade GUI - Web Style */
+QMainWindow {
+    background: #14121a;
+    color: #e8e6ef;
+}
+
+QWidget {
+    font-family: "Inter", "Segoe UI", sans-serif;
+    color: #e8e6ef;
+    font-size: 14px;
+}
+
+#Sidebar {
+    background: #1f1b2a;
+    border-right: 1px solid #3a3348;
+    border-top: none;
+    border-left: none;
+    border-bottom: none;
+    border-radius: 0;
+}
+
+#MainSurface {
+    background: #14121a;
+    border: none;
+    border-radius: 0;
+}
+
+#MainContent {
+    background: transparent;
+}
+
+#AppTitle {
+    color: #f9a826;
+    font-size: 20px;
+    font-weight: bold;
+    padding: 0px;
+    line-height: 1.2;
+}
+
+#SidebarSubtitle {
+    color: #a095ad;
+    font-size: 13px;
+    padding-bottom: 8px;
+}
+
+QPushButton[nav="true"] {
+    text-align: left;
+    background: transparent;
+    border: 1px solid #3a3348;
+    border-radius: 8px;
+    padding: 10px;
+    margin-top: 5px;
+    color: #e8e6ef;
+    font-size: 14px;
+    font-weight: normal;
+}
+
+QPushButton[nav="true"]:hover {
+    filter: brightness(1.08);
+    background: #2a2438;
+}
+
+QPushButton[nav="true"]:checked {
+    border: 1px solid #f9a826;
+    background: rgba(249, 168, 38, 0.12);
+    color: #e8e6ef;
+}
+
+#TopBar {
+    border: 1px solid #3a3348;
+    border-radius: 12px;
+    background: #1f1b2a;
+    padding: 0px;
+}
+
+#TopBarHeader {
+    color: #e8e6ef;
+    font-size: 16px;
+    font-weight: bold;
+}
+
+#FileLabel {
+    color: #a095ad;
+    font-size: 13px;
+    font-weight: normal;
+}
+
+#StatusLabel {
+    color: #a095ad;
+    font-weight: normal;
+    padding: 2px 4px;
+}
+
+QGroupBox {
+    background: #1f1b2a;
+    border: 1px solid #3a3348;
+    border-radius: 12px;
+    margin-top: 24px;
+    padding-top: 18px;
+    padding-left: 12px;
+    padding-right: 12px;
+    padding-bottom: 12px;
+    color: #e8e6ef;
+    font-weight: bold;
+    font-size: 14px;
+}
+
+QGroupBox::title {
+    subcontrol-origin: margin;
+    subcontrol-position: top left;
+    left: 12px;
+    top: -8px;
+    padding: 0;
+    color: #e8e6ef;
+    background: transparent;
+}
+
+QPushButton {
+    background: #2a2438;
+    border: 1px solid #3a3348;
+    border-radius: 8px;
+    color: #e8e6ef;
+    min-height: 36px;
+    padding: 4px 12px;
+}
+
+QPushButton:hover {
+    background: #332c44;
+}
+
+QPushButton:pressed {
+    background: #1f1b2a;
+}
+
+#LoadBtn {
+    min-width: 140px;
+}
+
+#SaveBtn,
+QPushButton.ActionBtn {
+    background: #2a2438;
+    border: 1px solid #3a3348;
+    color: #e8e6ef;
+}
+
+#SaveBtn:hover,
+QPushButton.ActionBtn:hover {
+    background: #332c44;
+}
+
+QPushButton.DangerBtn {
+    border-color: #ff5f73;
+    color: #ff5f73;
+}
+
+QPushButton.GodModeBtn {
+    background: #2a2438;
+    border: 1px solid #f9a826;
+    color: #f9a826;
+}
+
+QPushButton.GodModeBtn:hover {
+    background: rgba(249, 168, 38, 0.12);
+}
+
+QLineEdit,
+QSpinBox,
+QComboBox,
+QPlainTextEdit,
+QListWidget {
+    background: #2a2438;
+    border: 1px solid #3a3348;
+    border-radius: 8px;
+    padding: 6px;
+    color: #e8e6ef;
+    min-height: 24px;
+    selection-background-color: #3a3348;
+}
+
+QLineEdit:focus,
+QSpinBox:focus,
+QComboBox:focus,
+QPlainTextEdit:focus,
+QListWidget:focus {
+    border: 1px solid #f9a826;
+}
+
+QComboBox::drop-down {
+    border: none;
+    width: 24px;
+}
+
+QComboBox::down-arrow {
+    image: none;
+    border-left: 4px solid transparent;
+    border-right: 4px solid transparent;
+    border-top: 5px solid #a095ad;
+    width: 0;
+    height: 0;
+    margin-right: 8px;
+}
+
+QListWidget::item {
+    padding: 8px;
+    border-radius: 6px;
+    border-bottom: 1px solid #3a3348;
+}
+
+QListWidget::item:selected {
+    background: rgba(249, 168, 38, 0.12);
+    border: 1px solid #f9a826;
+    color: #e8e6ef;
+}
+
+QCheckBox {
+    spacing: 7px;
+}
+
+QCheckBox::indicator {
+    width: 16px;
+    height: 16px;
+    border-radius: 4px;
+    border: 1px solid #3a3348;
+    background: #2a2438;
+}
+
+QCheckBox::indicator:checked {
+    background: #f9a826;
+    border: 1px solid #ffcc66;
+}
+
+QScrollBar:vertical {
+    border: none;
+    width: 12px;
+    margin: 0;
+    background: transparent;
+}
+
+QScrollBar::handle:vertical {
+    background: #3a3348;
+    border-radius: 6px;
+    min-height: 24px;
+}
+
+QScrollBar::handle:vertical:hover {
+    background: #a095ad;
+}
+
+QScrollBar::add-line:vertical,
+QScrollBar::sub-line:vertical,
+QScrollBar::add-page:vertical,
+QScrollBar::sub-page:vertical {
+    background: none;
+    border: none;
+}
