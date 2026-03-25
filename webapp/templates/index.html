@@ -1,0 +1,263 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Balatro Save Editor (Web)</title>
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar">
+        <h1>BALATRO<br />SAVE EDITOR</h1>
+        <p class="muted">Web UI • Backend preserved</p>
+        <button class="nav-btn active" data-view="dashboard">Dashboard</button>
+        <button class="nav-btn" data-view="jokers">Joker Editor</button>
+        <button class="nav-btn" data-view="cards">Card Editor</button>
+        <button class="nav-btn" data-view="godmode">God Mode</button>
+      </aside>
+
+      <main class="main-panel">
+        <header class="topbar">
+          <div>
+            <h2>Current Save</h2>
+            <div id="savePath" class="muted">No save file loaded</div>
+          </div>
+          <div class="top-actions">
+            <input
+              id="savePathInput"
+              type="text"
+              placeholder="Path to save.jkr (optional)"
+            />
+            <button id="browseSaveBtn">Browse...</button>
+            <button id="loadSaveBtn">Load Save</button>
+            <button id="saveChangesBtn">Save Changes</button>
+            <button id="undoLastChangeBtn">Undo Last Change</button>
+            <button id="viewBackupHistoryBtn">View Backup History</button>
+            <select id="backupHistorySelect"></select>
+            <button id="restoreBackupBtn">Restore Backup</button>
+          </div>
+        </header>
+
+        <div id="toast-container" aria-live="polite" aria-atomic="false"></div>
+
+        <section id="dashboard" class="view active">
+          <h3>Dashboard</h3>
+          <div class="grid-3">
+            <div class="card">
+              <div class="label">Money</div>
+              <div id="dashMoney" class="value">-</div>
+            </div>
+            <div class="card">
+              <div class="label">Chips</div>
+              <div id="dashChips" class="value">-</div>
+            </div>
+            <div class="card">
+              <div class="label">Hands Left</div>
+              <div id="dashHands" class="value">-</div>
+            </div>
+          </div>
+          <div class="card">
+            <h4>Resource Editor</h4>
+            <div class="form-grid">
+              <label
+                >Money <input type="number" id="moneyInput" min="0"
+              /></label>
+              <label
+                >Chips <input type="number" id="chipsInput" min="0"
+              /></label>
+              <label
+                >Interest Cap <input type="number" id="interestInput" min="0"
+              /></label>
+              <label
+                >Reroll Cost <input type="number" id="rerollInput" min="0"
+              /></label>
+              <label
+                >Hands Left <input type="number" id="handsLeftInput" min="0"
+              /></label>
+              <label
+                >Discards Left
+                <input type="number" id="discardsLeftInput" min="0"
+              /></label>
+            </div>
+            <button id="applyResourcesBtn">Apply Resource Limits</button>
+          </div>
+          <div class="card">
+            <h4>Capacity Editor</h4>
+            <div class="form-grid">
+              <label
+                >Hand Size <input type="number" id="handSizeInput" min="1"
+              /></label>
+              <label
+                >Joker Slots <input type="number" id="jokerSlotsInput" min="1"
+              /></label>
+              <label
+                >Consumable Slots
+                <input type="number" id="consumableSlotsInput" min="1"
+              /></label>
+            </div>
+            <button id="applyCapacitiesBtn">Apply Capacity Limits</button>
+          </div>
+        </section>
+
+        <section id="jokers" class="view">
+          <h3>Joker Editor</h3>
+          <div class="split">
+            <div class="card">
+              <div class="row">
+                <strong>Jokers</strong>
+                <button id="refreshJokersBtn">Refresh</button>
+              </div>
+              <div id="jokerList" class="visual-list"></div>
+            </div>
+            <div class="card">
+              <h4>Edit Joker</h4>
+              <label
+                >Edition
+                <select id="jokerEdition"></select>
+              </label>
+              <label
+                >Seal
+                <select id="jokerSeal"></select>
+              </label>
+              <div id="jokerStickers" class="checks"></div>
+              <label
+                >Apply to
+                <select id="jokerApplyScope">
+                  <option value="selected">Selected only</option>
+                  <option value="same_id">Same ID</option>
+                  <option value="all">All</option>
+                </select>
+              </label>
+              <div class="row">
+                <button id="previewJokerBtn">Preview Changes</button>
+                <button id="applyJokerBtn">Apply Changes</button>
+                <button id="removeJokerBtn" class="danger">Remove Joker</button>
+              </div>
+              <pre id="jokerPreview" class="preview"></pre>
+            </div>
+          </div>
+          <div class="card">
+            <h4>Add Joker</h4>
+            <div class="form-grid">
+              <label
+                >Joker
+                <select id="addJokerSelect"></select>
+              </label>
+              <label
+                >Edition
+                <select id="addJokerEdition"></select>
+              </label>
+              <label
+                >Seal
+                <select id="addJokerSeal"></select>
+              </label>
+            </div>
+            <div id="addJokerStickers" class="checks"></div>
+            <button id="addJokerBtn">Add Joker</button>
+          </div>
+        </section>
+
+        <section id="cards" class="view">
+          <h3>Card Editor (Deck / Hand / Consumables)</h3>
+          <div class="card">
+            <label
+              >Area
+              <select id="cardAreaSelect">
+                <option value="deck">deck</option>
+                <option value="hand">hand</option>
+                <option value="consumeables">consumeables</option>
+              </select>
+            </label>
+            <button id="refreshCardsBtn">Refresh Cards</button>
+          </div>
+          <div class="split">
+            <div class="card">
+              <div id="cardList" class="visual-list"></div>
+            </div>
+            <div class="card">
+              <h4>Card Properties</h4>
+              <div class="editor-section">
+                <label
+                  >Apply to
+                  <select id="cardApplyScope">
+                    <option value="selected">Selected only</option>
+                    <option value="same_id">Same ID</option>
+                    <option value="all">All</option>
+                  </select>
+                </label>
+              </div>
+
+              <div class="editor-section">
+                <h5>Core Properties</h5>
+                <div class="form-grid">
+                  <label
+                    >Edition
+                    <select id="cardEdition"></select>
+                  </label>
+                  <label
+                    >Enhancement
+                    <select id="cardTransformEnhancement"></select>
+                  </label>
+                  <label
+                    >Seal
+                    <select id="cardSeal"></select>
+                  </label>
+                </div>
+              </div>
+
+              <div class="editor-section">
+                <h5>Card Identity</h5>
+                <div class="form-grid">
+                  <label
+                    >Suit
+                    <select id="cardTransformSuit"></select>
+                  </label>
+                  <label
+                    >Rank
+                    <select id="cardTransformRank"></select>
+                  </label>
+                </div>
+              </div>
+
+              <div class="editor-section">
+                <h5>Flags</h5>
+                <div id="cardStickers" class="checks"></div>
+              </div>
+
+              <div class="row">
+                <button id="previewCardBtn">Preview</button>
+                <button id="applyCardBtn">Apply</button>
+                <button id="removeCardBtn" class="danger">Remove Card</button>
+              </div>
+
+              <pre id="cardPreview" class="preview"></pre>
+            </div>
+          </div>
+        </section>
+
+        <section id="godmode" class="view">
+          <h3>God Mode / Cheats</h3>
+          <div class="grid-3">
+            <button data-action="infinite_resources" class="cheat-btn">
+              Infinite Resources
+            </button>
+            <button data-action="all_negative_jokers" class="cheat-btn">
+              All Negative Jokers
+            </button>
+            <button data-action="max_hands" class="cheat-btn">Max Hands</button>
+            <button data-action="free_shop" class="cheat-btn">Free Shop</button>
+            <button data-action="guaranteed_rng" class="cheat-btn">
+              Guaranteed RNG
+            </button>
+            <button data-action="unlock_vouchers" class="cheat-btn">
+              Unlock All Vouchers
+            </button>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <script src="/static/app.js"></script>
+  </body>
+</html>
