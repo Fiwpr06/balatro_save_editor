@@ -60,6 +60,17 @@ python web.py
 
 Open `http://127.0.0.1:5000`.
 
+For Render production deploy, do not run Flask development server (`python web.py`).
+Use Gunicorn as Start Command:
+
+```bash
+gunicorn web:app --bind 0.0.0.0:${PORT:-10000} --workers ${WEB_CONCURRENCY:-1}
+```
+
+This repository includes a `render.yaml` blueprint with this configuration.
+
+If your Render service was created manually before adding `render.yaml`, update the service Start Command in Render dashboard to the command above.
+
 ## Balatro-Core Integration
 
 The editor supports data-driven mapping from extracted game source (`Balatro-Core/*.lua`) when the folder is present locally.
