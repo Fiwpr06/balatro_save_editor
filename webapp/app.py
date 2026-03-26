@@ -28,13 +28,6 @@ class AppState:
 state = AppState()
 
 
-def _default_save_path():
-    appdata = os.getenv('APPDATA')
-    if not appdata:
-        return None
-    return os.path.join(appdata, 'Balatro', '2', 'save.jkr')
-
-
 def _ok(data=None, status=200):
     payload = {'success': True}
     if data is not None:
@@ -104,37 +97,6 @@ def _core_resources_root(service=None):
     return os.path.join(repo_root, 'Balatro-Core', 'resources')
 
 
-def _pick_save_path(initial_path=None):
-    try:
-        import tkinter as tk
-        from tkinter import filedialog
-    except Exception as exc:
-        raise RuntimeError('Native file dialog is unavailable on this Python environment.') from exc
-
-    initial_dir = None
-    initial_file = None
-    if initial_path:
-        if os.path.isdir(initial_path):
-            initial_dir = initial_path
-        else:
-            initial_dir = os.path.dirname(initial_path)
-            initial_file = os.path.basename(initial_path)
-
-    root = tk.Tk()
-    root.withdraw()
-    root.attributes('-topmost', True)
-    try:
-        selected = filedialog.askopenfilename(
-            title='Select Balatro save file',
-            initialdir=initial_dir,
-            initialfile=initial_file,
-            filetypes=[('Balatro Save', '*.jkr'), ('All Files', '*.*')],
-        )
-        return selected or None
-    finally:
-        root.destroy()
-
-
 def create_app():
     app = Flask(__name__, template_folder='templates', static_folder='static')
     app.secret_key = os.environ.get('FLASK_SECRET_KEY', 'balatro_super_secret_session_key')
@@ -145,7 +107,8 @@ def create_app():
 
     @app.get('/core-assets/<path:relative_path>')
     def core_assets(relative_path):
-        service = state.get_service()
+        uid = session.get('uid')
+        service = state.get_service(uid) if uid else None
         resources_root = os.path.realpath(_core_resources_root(service))
         requested = os.path.realpath(os.path.join(resources_root, relative_path))
         if not requested.startswith(resources_root):
@@ -168,49 +131,49 @@ def create_app():
             }
         )
 
-    @app.get('/api/default-save-path')
-    def default_save_path():
-        return _ok({'path': _default_save_path()})
+    @app.post('/api/upload-save')
+    def upload_save():
+        uploaded = request.files.get('file')
+        if not uploaded:
+            return _error('No file uploaded.', status=422)
 
-    @app.post('/api/pick-save-path')
-    def pick_save_path():
-        payload = request.get_json(silent=True) or {}
-        initial_path = payload.get('initial_path') or _default_save_path()
-        try:
-            selected = _pick_save_path(initial_path=initial_path)
-            return _ok({'path': selected, 'canceled': selected is None})
-        except RuntimeError as exc:
-            return _error(str(exc), status=500)
-        except Exception as exc:
-            return _error('Failed to open file picker.', status=500, details=str(exc))
+        filename = uploaded.filename or ''
+        if not filename.lower().endswith('.jkr'):
+            return _error('Invalid file type. Please upload a .jkr save file.', status=422)
 
-    @app.post('/api/load-save')
-    def load_save():
-        payload = request.get_json(silent=True) or {}
-        path = payload.get('path') or _default_save_path()
-        if not path:
-            return _error('No save path provided and default path is unavailable.', status=422)
-        if not os.path.exists(path):
-            return _error(f'Save file not found: {path}', status=404)
+        uid = session.get('uid')
+        if not uid:
+            uid = str(uuid.uuid4())
+            session['uid'] = uid
+
+        temp_dir = tempfile.mkdtemp(prefix='balatro-save-')
+        save_path = os.path.join(temp_dir, 'save.jkr')
+
         try:
-            service = EditorService(path)
-            state.set_service(service)
+            uploaded.save(save_path)
+            service = EditorService(save_path)
+            state.set_service(uid, service)
             return _ok({'save_path': service.get_save_file_path()})
         except Exception as exc:
-            return _error('Failed to load save file.', status=500, details=str(exc))
+            return _error('Failed to load uploaded save file.', status=500, details=str(exc))
 
-    @app.post('/api/save')
-    def save_changes():
+    @app.get('/api/download-save')
+    def download_save():
         service, err = _require_service()
         if err:
             return err
         try:
-            backup_path = service.save()
-            return _ok({'message': 'Changes saved successfully.', 'backup_path': backup_path})
+            service.save()
+            return send_file(
+                service.get_save_file_path(),
+                as_attachment=True,
+                download_name='save_modified.jkr',
+                mimetype='application/octet-stream',
+            )
         except ValueError as exc:
             return _error('Save validation failed.', status=422, details=str(exc))
         except Exception as exc:
-            return _error('Failed to save file.', status=500, details=str(exc))
+            return _error('Failed to build download file.', status=500, details=str(exc))
 
     @app.get('/api/backups')
     def backups():
