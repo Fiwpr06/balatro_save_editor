@@ -733,7 +733,6 @@ async function applyCardEditor(area, cardIndex) {
   toast("Changes applied");
 }
 
-
 async function saveChanges() {
   const res = await fetch("/api/download-save");
   if (!res.ok) {
@@ -741,7 +740,7 @@ async function saveChanges() {
     try {
       const js = await res.json();
       msg = js.error || msg;
-    } catch(e){}
+    } catch (e) {}
     throw new Error(msg);
   }
   const blob = await res.blob();
@@ -755,9 +754,6 @@ async function saveChanges() {
   window.URL.revokeObjectURL(url);
   a.remove();
   toast("Save changes downloaded successfully!");
-}" });
-  await refreshBackupHistory();
-  toast("Changes saved");
 }
 
 async function refreshBackupHistory() {
@@ -799,12 +795,12 @@ function bindEvents() {
     const file = e.target.files[0];
     const formData = new FormData();
     formData.append("file", file);
-    
+
     try {
       el("savePath").textContent = "Uploading...";
       const res = await fetch("/api/upload-save", {
         method: "POST",
-        body: formData
+        body: formData,
       });
       const data = await res.json();
       if (!res.ok || !data.success) {
@@ -818,16 +814,6 @@ function bindEvents() {
       el("savePath").textContent = "Upload failed";
     }
     el("fileUploadInput").value = "";
-  });
-
-  
-      if (data.canceled || !data.path) {
-        return;
-      }
-            toast("Path selected");
-    } catch (err) {
-      toast(err.message, true);
-    }
   });
 
   el("saveChangesBtn").addEventListener("click", async () => {
@@ -1081,17 +1067,17 @@ async function bootstrap() {
   bindEvents();
   try {
     const health = await api("/api/health");
+    await loadAssetManifest();
+    await loadCatalog();
     if (health.save_path) {
       el("savePath").textContent = health.save_path;
-      await loadAssetManifest();
-      await loadCatalog();
       await refreshDashboard();
       await refreshJokers();
       await refreshCards();
       await refreshBackupHistory();
+    } else {
+      el("savePath").textContent = "No save file loaded";
     }
-    if (health.default_save_path) {
-          }
   } catch (err) {
     toast(err.message, true);
   }
