@@ -412,6 +412,9 @@ def create_app():
             if enhancement == '':
                 enhancement = None
 
+            if suit is None and rank is None and enhancement is None:
+                return _ok({'preview': {'scope': apply_scope, 'target_count': 0, 'samples': []}})
+
             preview = service.preview_card_transform_scoped(
                 area,
                 card_index,

@@ -200,6 +200,9 @@ function buildModifierPayload(area, cardIndex, prefix) {
 
 function buildTransformPayload(area, cardIndex) {
   const selected = getSelectedItemForArea(area, cardIndex) || {};
+  const enhancementIds = new Set(
+    (state.catalog?.enhancements || []).map((entry) => entry.id),
+  );
   const payload = {
     area,
     card_index: cardIndex,
@@ -219,7 +222,9 @@ function buildTransformPayload(area, cardIndex) {
   }
 
   const uiEnhancement = el("cardTransformEnhancement").value || "";
-  const currentEnhancement = selected.center_id || "";
+  const currentEnhancement = enhancementIds.has(selected.center_id)
+    ? selected.center_id
+    : "";
   if (uiEnhancement !== currentEnhancement) {
     payload.enhancement = uiEnhancement || null;
   }
@@ -244,16 +249,31 @@ function hasTransformChanges(payload) {
 }
 
 function syncEditorControls(prefix, card) {
-  if (!state.catalog || !card) {
+  if (!state.catalog) {
     return;
   }
-  el(`${prefix}Edition`).value = card.edition || "";
-  el(`${prefix}Seal`).value = card.seal || "";
+  const selected = card || {};
+  el(`${prefix}Edition`).value = selected.edition || "";
+  el(`${prefix}Seal`).value = selected.seal || "";
   renderStickerChecks(
     el(`${prefix}Stickers`),
     state.catalog.stickers,
-    card.stickers || {},
+    selected.stickers || {},
   );
+
+  if (prefix === "card") {
+    el("cardTransformSuit").value = selected.base_suit || "";
+    el("cardTransformRank").value = selected.base_value || "";
+
+    const enhancementIds = new Set(
+      (state.catalog?.enhancements || []).map((entry) => entry.id),
+    );
+    el("cardTransformEnhancement").value = enhancementIds.has(
+      selected.center_id,
+    )
+      ? selected.center_id
+      : "";
+  }
 }
 
 function renderCardList(listId, items, selectedIndex, onSelect) {

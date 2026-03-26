@@ -570,9 +570,6 @@ class EditorService(object):
             if not center or center.set_name != 'Enhanced':
                 errors.append(f'Invalid enhancement center: {enhancement}')
 
-        if suit is None and rank is None and enhancement is None:
-            errors.append('At least one transform field is required (suit, rank, enhancement).')
-
         return errors
 
     def _transform_preview_item(self, card, suit=None, rank=None, enhancement=None):
