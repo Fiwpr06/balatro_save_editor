@@ -73,11 +73,27 @@ function toast(message, level = "info") {
   showToast(message, level || "info");
 }
 
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 async function api(path, options = {}) {
-  const response = await fetch(path, {
-    headers: { "Content-Type": "application/json" },
-    ...options,
-  });
+  let response = null;
+  const maxAttempts = 4;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    response = await fetch(path, {
+      headers: { "Content-Type": "application/json" },
+      ...options,
+    });
+
+    if (response.status !== 503 || attempt === maxAttempts) {
+      break;
+    }
+
+    await sleep(700 * attempt);
+  }
+
   const payload = await response.json();
   if (!response.ok || payload.success === false) {
     const details = payload.details ? `\n${payload.details}` : "";
