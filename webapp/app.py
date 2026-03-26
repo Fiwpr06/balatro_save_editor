@@ -97,6 +97,12 @@ def _core_resources_root(service=None):
     return os.path.join(repo_root, 'Balatro-Core', 'resources')
 
 
+def _core_root_exists():
+    repo_root = os.path.dirname(os.path.dirname(__file__))
+    core_root = os.path.join(repo_root, 'Balatro-Core')
+    return os.path.isdir(core_root), core_root
+
+
 def create_app():
     app = Flask(__name__, template_folder='templates', static_folder='static')
     app.secret_key = os.environ.get('FLASK_SECRET_KEY', 'balatro_super_secret_session_key')
@@ -150,11 +156,22 @@ def create_app():
         save_path = os.path.join(temp_dir, 'save.jkr')
 
         try:
+            core_exists, core_root = _core_root_exists()
+            if not core_exists:
+                return _error(
+                    'Server is missing Balatro core data required to parse saves.',
+                    status=500,
+                    details=(
+                        f'Missing directory: {core_root}. '
+                        'Your deploy likely excluded Balatro-Core/ (check .gitignore and repository contents).'
+                    ),
+                )
             uploaded.save(save_path)
             service = EditorService(save_path)
             state.set_service(uid, service)
             return _ok({'save_path': service.get_save_file_path()})
         except Exception as exc:
+            app.logger.exception('Upload save failed')
             return _error('Failed to load uploaded save file.', status=500, details=str(exc))
 
     @app.get('/api/download-save')

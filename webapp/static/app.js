@@ -828,7 +828,8 @@ function bindEvents() {
       });
       const data = await res.json();
       if (!res.ok || !data.success) {
-        throw new Error(data.error || "Failed to upload.");
+        const details = data.details ? `\n${data.details}` : "";
+        throw new Error((data.error || "Failed to upload.") + details);
       }
       toast("Save file uploaded and loaded!");
       el("savePath").textContent = file.name;
