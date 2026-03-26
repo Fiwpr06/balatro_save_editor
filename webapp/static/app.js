@@ -542,6 +542,14 @@ async function refreshCards() {
   syncEditorControls("card", selected);
 }
 
+async function refreshAll() {
+  await loadCatalog();
+  await refreshDashboard();
+  await refreshJokers();
+  await refreshCards();
+  await refreshBackupHistory();
+}
+
 async function preview(area, cardIndex, prefix, outputId) {
   if (!cardIndex) {
     toast("Select a card first", true);
@@ -1083,14 +1091,9 @@ async function bootstrap() {
   bindEvents();
   try {
     const health = await api("/api/health");
-    await loadAssetManifest();
-    await loadCatalog();
     if (health.save_path) {
       el("savePath").textContent = health.save_path;
-      await refreshDashboard();
-      await refreshJokers();
-      await refreshCards();
-      await refreshBackupHistory();
+      await refreshAll();
     } else {
       el("savePath").textContent = "No save file loaded";
     }
