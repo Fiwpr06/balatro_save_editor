@@ -1,6 +1,5 @@
 # Ignore extracted game core (external data source)
-Balatro-Core/
-Blatro-Core/
+# Balatro-Core is required for web deployment runtime.
 
 # Python cache/artifacts
 __pycache__/
