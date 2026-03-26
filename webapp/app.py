@@ -1,7 +1,9 @@
 import os
+import uuid
+import tempfile
 from threading import Lock
 
-from flask import Flask, jsonify, render_template, request, send_from_directory
+from flask import Flask, jsonify, render_template, request, send_from_directory, session, send_file
 
 from services.editor_service import EditorService
 
@@ -12,15 +14,15 @@ ALLOWED_AREAS = {'jokers', 'consumeables', 'deck', 'hand'}
 class AppState:
     def __init__(self):
         self.lock = Lock()
-        self.editor_service = None
+        self.services = {}
 
-    def set_service(self, service):
+    def set_service(self, uid, service):
         with self.lock:
-            self.editor_service = service
+            self.services[uid] = service
 
-    def get_service(self):
+    def get_service(self, uid):
         with self.lock:
-            return self.editor_service
+            return self.services.get(uid)
 
 
 state = AppState()
@@ -48,9 +50,12 @@ def _error(message, status=400, details=None):
 
 
 def _require_service():
-    service = state.get_service()
+    uid = session.get('uid')
+    if not uid:
+        return None, _error('No session found. Please upload a save file first.', status=400)
+    service = state.get_service(uid)
     if not service:
-        return None, _error('No save file loaded. Call /api/load-save first.', status=400)
+        return None, _error('Session expired or lost due to server restart. Please upload your save file again.', status=400)
     return service, None
 
 
@@ -132,6 +137,7 @@ def _pick_save_path(initial_path=None):
 
 def create_app():
     app = Flask(__name__, template_folder='templates', static_folder='static')
+    app.secret_key = os.environ.get('FLASK_SECRET_KEY', 'balatro_super_secret_session_key')
 
     @app.get('/')
     def index():
@@ -153,12 +159,12 @@ def create_app():
 
     @app.get('/api/health')
     def health():
-        service = state.get_service()
+        uid = session.get('uid')
+        service = state.get_service(uid) if uid else None
         return _ok(
             {
                 'loaded': service is not None,
-                'save_path': service.get_save_file_path() if service else None,
-                'default_save_path': _default_save_path(),
+                'save_path': service.get_save_file_path() if service else None
             }
         )
 

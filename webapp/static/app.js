@@ -733,25 +733,29 @@ async function applyCardEditor(area, cardIndex) {
   toast("Changes applied");
 }
 
-async function loadSave() {
-  const path = el("savePathInput").value.trim();
-  const payload = path ? { path } : {};
-  const data = await api("/api/load-save", {
-    method: "POST",
-    body: JSON.stringify(payload),
-  });
-  el("savePath").textContent = data.save_path;
-  await loadAssetManifest();
-  await loadCatalog();
-  await refreshDashboard();
-  await refreshJokers();
-  await refreshCards();
-  await refreshBackupHistory();
-  toast("Save loaded");
-}
 
 async function saveChanges() {
-  await api("/api/save", { method: "POST", body: "{}" });
+  const res = await fetch("/api/download-save");
+  if (!res.ok) {
+    let msg = "Failed to download save.";
+    try {
+      const js = await res.json();
+      msg = js.error || msg;
+    } catch(e){}
+    throw new Error(msg);
+  }
+  const blob = await res.blob();
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.style.display = "none";
+  a.href = url;
+  a.download = "save.jkr";
+  document.body.appendChild(a);
+  a.click();
+  window.URL.revokeObjectURL(url);
+  a.remove();
+  toast("Save changes downloaded successfully!");
+}" });
   await refreshBackupHistory();
   toast("Changes saved");
 }
@@ -786,27 +790,41 @@ function bindEvents() {
     btn.addEventListener("click", () => setActiveView(btn.dataset.view));
   });
 
-  el("loadSaveBtn").addEventListener("click", async () => {
-    try {
-      await loadSave();
-    } catch (err) {
-      toast(err.message, true);
-    }
+  el("uploadSaveBtn").addEventListener("click", () => {
+    el("fileUploadInput").click();
   });
 
-  el("browseSaveBtn").addEventListener("click", async () => {
+  el("fileUploadInput").addEventListener("change", async (e) => {
+    if (!e.target.files.length) return;
+    const file = e.target.files[0];
+    const formData = new FormData();
+    formData.append("file", file);
+    
     try {
-      const data = await api("/api/pick-save-path", {
+      el("savePath").textContent = "Uploading...";
+      const res = await fetch("/api/upload-save", {
         method: "POST",
-        body: JSON.stringify({
-          initial_path: el("savePathInput").value.trim() || null,
-        }),
+        body: formData
       });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || "Failed to upload.");
+      }
+      toast("Save file uploaded and loaded!");
+      el("savePath").textContent = file.name;
+      await refreshAll();
+    } catch (err) {
+      toast(err.message, true);
+      el("savePath").textContent = "Upload failed";
+    }
+    el("fileUploadInput").value = "";
+  });
+
+  
       if (data.canceled || !data.path) {
         return;
       }
-      el("savePathInput").value = data.path;
-      toast("Path selected");
+            toast("Path selected");
     } catch (err) {
       toast(err.message, true);
     }
@@ -1073,8 +1091,7 @@ async function bootstrap() {
       await refreshBackupHistory();
     }
     if (health.default_save_path) {
-      el("savePathInput").placeholder = health.default_save_path;
-    }
+          }
   } catch (err) {
     toast(err.message, true);
   }

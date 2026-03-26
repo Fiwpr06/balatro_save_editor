@@ -23,20 +23,21 @@
             <h2>Current Save</h2>
             <div id="savePath" class="muted">No save file loaded</div>
           </div>
+          
           <div class="top-actions">
-            <input
-              id="savePathInput"
-              type="text"
-              placeholder="Path to save.jkr (optional)"
-            />
-            <button id="browseSaveBtn">Browse...</button>
-            <button id="loadSaveBtn">Load Save</button>
-            <button id="saveChangesBtn">Save Changes</button>
+            <!-- Hidden file input -->
+            <input type="file" id="fileUploadInput" accept=".jkr" style="display: none;" />
+            <button id="uploadSaveBtn">Upload Save File</button>
+            <button id="saveChangesBtn">Download Modified Save</button>
+            
+            <span class="divider"></span>
+            
             <button id="undoLastChangeBtn">Undo Last Change</button>
-            <button id="viewBackupHistoryBtn">View Backup History</button>
-            <select id="backupHistorySelect"></select>
-            <button id="restoreBackupBtn">Restore Backup</button>
+            <button id="viewBackupHistoryBtn" style="display:none;">View Backup History</button>
+            <select id="backupHistorySelect" style="display:none;"></select>
+            <button id="restoreBackupBtn" style="display:none;">Restore Backup</button>
           </div>
+
         </header>
 
         <div id="toast-container" aria-live="polite" aria-atomic="false"></div>
