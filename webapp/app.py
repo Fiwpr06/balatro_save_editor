@@ -1,6 +1,7 @@
 import os
 import uuid
 import tempfile
+from decimal import Decimal, InvalidOperation
 from threading import Lock
 
 from flask import Flask, jsonify, render_template, request, send_from_directory, session, send_file
@@ -75,6 +76,17 @@ def _parse_positive_int(value, name):
     if parsed <= 0:
         raise ValueError(f'{name} must be > 0')
     return parsed
+
+
+def _coerce_stat_int(value, name):
+    text = str(value).strip()
+    if text == '':
+        raise ValueError(f'{name} is empty')
+
+    try:
+        return int(Decimal(text))
+    except (InvalidOperation, ValueError, OverflowError):
+        raise ValueError(f'{name} is not a valid numeric literal: {text}')
 
 
 def _parse_area(value):
@@ -600,15 +612,15 @@ def create_app():
 
         try:
             data = {
-                'money': int(service.get_current_money()),
-                'chips': int(service.get_current_chips()),
-                'interest_cap': int(service.get_value(['GAME', 'interest_cap'])),
-                'reroll_cost': int(service.get_value(['GAME', 'current_round', 'reroll_cost'])),
-                'hands_left': int(service.get_value(['GAME', 'current_round', 'hands_left'])),
-                'discards_left': int(service.get_value(['GAME', 'current_round', 'discards_left'])),
-                'hand_size': int(service.get_value(['GAME', 'starting_params', 'hand_size'])),
-                'joker_slots': int(service.get_value(['GAME', 'starting_params', 'joker_slots'])),
-                'consumable_slots': int(service.get_value(['GAME', 'starting_params', 'consumable_slots'])),
+                'money': _coerce_stat_int(service.get_current_money(), 'money'),
+                'chips': _coerce_stat_int(service.get_current_chips(), 'chips'),
+                'interest_cap': _coerce_stat_int(service.get_value(['GAME', 'interest_cap']), 'interest_cap'),
+                'reroll_cost': _coerce_stat_int(service.get_value(['GAME', 'current_round', 'reroll_cost']), 'reroll_cost'),
+                'hands_left': _coerce_stat_int(service.get_value(['GAME', 'current_round', 'hands_left']), 'hands_left'),
+                'discards_left': _coerce_stat_int(service.get_value(['GAME', 'current_round', 'discards_left']), 'discards_left'),
+                'hand_size': _coerce_stat_int(service.get_value(['GAME', 'starting_params', 'hand_size']), 'hand_size'),
+                'joker_slots': _coerce_stat_int(service.get_value(['GAME', 'starting_params', 'joker_slots']), 'joker_slots'),
+                'consumable_slots': _coerce_stat_int(service.get_value(['GAME', 'starting_params', 'consumable_slots']), 'consumable_slots'),
             }
             return _ok({'stats': data})
         except Exception as exc:
