@@ -312,6 +312,50 @@ class BalatroSaveEditor(object):
         self._set_raw_lua_value(parent_map, key, self._lua_string_literal(expected))
         return True
 
+    def _sync_consumeable_ability(self, ability_map, consumeable_config=None):
+        changed = False
+        defaults = consumeable_config or {}
+
+        consumeable_node = None
+        try:
+            if 'consumeable' in ability_map:
+                consumeable_node = ability_map['consumeable']
+        except Exception:
+            consumeable_node = None
+
+        if not self._is_map_struct(consumeable_node):
+            self._set_raw_lua_value(ability_map, 'consumeable', '{}')
+            changed = True
+            consumeable_node = self._ensure_child_map(ability_map, 'consumeable')
+
+        if consumeable_node is None or not self._is_map_struct(consumeable_node):
+            return changed
+
+        if not defaults:
+            return changed
+
+        desired_keys = {str(key) for key in defaults.keys()}
+        for struct in list(consumeable_node.structs):
+            if hasattr(struct, 'key') and struct.key not in desired_keys:
+                consumeable_node.structs.remove(struct)
+                changed = True
+
+        for key, raw_value in defaults.items():
+            key_text = str(key)
+            raw_text = str(raw_value)
+            has_same_value = False
+            try:
+                if key_text in consumeable_node and str(consumeable_node[key_text]) == raw_text:
+                    has_same_value = True
+            except Exception:
+                has_same_value = False
+
+            if not has_same_value:
+                self._set_raw_lua_value(consumeable_node, key_text, raw_text)
+                changed = True
+
+        return changed
+
     def _to_int_literal(self, value, default=0):
         try:
             parsed = self._parse_literal(value)
@@ -675,6 +719,12 @@ class BalatroSaveEditor(object):
         changed = self._set_string_field(ability, 'effect', center_def.effect or '') or changed
         changed = self._set_string_field(ability, 'set', center_def.set_name or '') or changed
 
+        if center_def.set_name in ('Tarot', 'Planet', 'Spectral'):
+            changed = self._sync_consumeable_ability(
+                ability,
+                consumeable_config=center_def.config_defaults,
+            ) or changed
+
         cfg = center_def.config_defaults or {}
         defaults = {
             'mult': cfg.get('mult', '0'),
@@ -973,6 +1023,28 @@ class BalatroSaveEditor(object):
             card['label'] = center_name
         return True
 
+    def clear_card_enhancement(self, area_name, card_index, center_id='c_base', center_name=None, center_effect=None):
+        _key, card = self._get_card_by_position(area_name, card_index)
+        if 'save_fields' not in card or 'center' not in card['save_fields']:
+            return False
+        card['save_fields']['center'] = center_id
+
+        self._set_raw_lua_value(card, 'ability', '{}')
+        ability = self._ensure_child_map(card, 'ability')
+        if ability is None:
+            return False
+
+        ability['set'] = 'Default'
+        if center_name is not None:
+            ability['name'] = center_name
+        if center_effect is not None:
+            ability['effect'] = center_effect
+        else:
+            self._remove_map_key(ability, 'effect')
+        if center_name is not None and 'label' in card:
+            card['label'] = center_name
+        return True
+
     def _card_display_name(self, card, fallback='Unknown'):
         try:
             if 'ability' in card and 'name' in card['ability']:
@@ -1191,6 +1263,77 @@ class BalatroSaveEditor(object):
 
         if center_name == 'Oops! All 6s':
             self._scale_game_probabilities(2)
+
+        self.ensure_card_core_fields(card, template_card=source_template)
+        return new_key
+
+    def add_consumeable_by_center(self, center_id, center_name=None, center_set=None, center_effect=None, consumeable_config=None):
+        self.ensure_required_card_areas()
+
+        def next_sort_id():
+            max_sort_id = 0
+            for area_name in ('jokers', 'deck', 'hand', 'consumeables'):
+                try:
+                    for _key, area_card in self._iter_cards(area_name):
+                        if 'sort_id' in area_card:
+                            try:
+                                max_sort_id = max(max_sort_id, int(str(area_card['sort_id'])))
+                            except Exception:
+                                continue
+                except Exception:
+                    continue
+            return max_sort_id + 1
+
+        source_area = None
+        source_template = None
+        for candidate_area in ('consumeables', 'jokers', 'deck', 'hand'):
+            try:
+                _template_key, candidate_template = self._get_card_by_position(candidate_area, 1)
+                source_area = candidate_area
+                source_template = candidate_template
+                break
+            except Exception:
+                continue
+
+        if source_area is None:
+            raise ValueError('No card template is available to create a new consumeable.')
+
+        new_key, _source_key = self.add_card_clone('consumeables', source_index=1, source_area=source_area)
+        card = self._card_area_cards('consumeables')[new_key]
+
+        if 'save_fields' in card:
+            if 'center' in card['save_fields']:
+                card['save_fields']['center'] = center_id
+            if 'card' in card['save_fields']:
+                card['save_fields']['card'] = 'nil'
+
+        ability = self._ensure_child_map(card, 'ability')
+        if ability is not None:
+            set_name = center_set or 'Tarot'
+            self._set_string_field(ability, 'set', set_name)
+            self._set_string_field(ability, 'name', center_name or center_id)
+            self._set_string_field(ability, 'effect', center_effect or '')
+            self._sync_consumeable_ability(ability, consumeable_config=consumeable_config)
+
+            for sticker_key in ('eternal', 'perishable', 'rental'):
+                if sticker_key in ability:
+                    self._remove_map_key(ability, sticker_key)
+
+        if 'edition' in card:
+            self._remove_map_key(card, 'edition')
+        if 'seal' in card:
+            self._remove_map_key(card, 'seal')
+
+        if 'sort_id' in card:
+            card['sort_id'] = str(next_sort_id())
+        card['playing_card'] = 'false'
+        card['facing'] = 'front'
+        card['sprite_facing'] = 'front'
+        card['flipping'] = 'nil'
+        card['highlighted'] = 'false'
+        card['debuff'] = 'false'
+        card['pinned'] = 'false'
+        card['added_to_deck'] = 'true'
 
         self.ensure_card_core_fields(card, template_card=source_template)
         return new_key
