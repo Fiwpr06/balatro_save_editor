@@ -141,6 +141,169 @@ class EditorService(object):
         self._snapshot()
         self.editor.set_voucher(voucher_key, enabled)
 
+    def _is_locked_center(self, center_id, center_def):
+        if center_def is None:
+            return True
+        if center_def.name == 'Locked':
+            return True
+        center_key = str(center_id or '').strip().lower()
+        if center_key.endswith('_locked') or 'undiscovered' in center_key:
+            return True
+        return False
+
+    def list_voucher_catalog(self):
+        active = set(self.list_active_vouchers())
+        vouchers = []
+
+        for center_id, center_def in self.game_catalog.centers.items():
+            if center_def.set_name != 'Voucher':
+                continue
+            if self._is_locked_center(center_id, center_def):
+                continue
+
+            try:
+                render = self.game_catalog.resolve_card_sprite(
+                    center_id=center_id,
+                    card_proto=None,
+                    base_suit=None,
+                    base_value=None,
+                    area_name='consumeables',
+                )
+            except Exception:
+                render = None
+
+            vouchers.append(
+                {
+                    'id': center_id,
+                    'name': center_def.name,
+                    'set': center_def.set_name,
+                    'order': center_def.order,
+                    'enabled': center_id in active,
+                    'render': render,
+                }
+            )
+
+        vouchers.sort(key=lambda item: ((item['order'] if item['order'] is not None else 9999), item['id']))
+        return vouchers
+
+    def set_voucher_enabled(self, voucher_key, enabled=True):
+        center_def = self.game_catalog.centers.get(voucher_key)
+        if center_def is None or center_def.set_name != 'Voucher':
+            raise ValueError(f'Unknown Voucher center: {voucher_key}')
+        if self._is_locked_center(voucher_key, center_def):
+            raise ValueError(f'Voucher is not available: {voucher_key}')
+
+        self._snapshot()
+        self.editor.set_voucher(voucher_key, bool(enabled))
+
+        return {
+            'id': voucher_key,
+            'name': center_def.name,
+            'enabled': bool(enabled),
+        }
+
+    def list_consumeable_catalog(self, set_name=None):
+        set_lookup = {
+            'tarot': 'Tarot',
+            'tarots': 'Tarot',
+            'planet': 'Planet',
+            'planets': 'Planet',
+            'spectral': 'Spectral',
+            'spectrals': 'Spectral',
+        }
+        selected_set = None
+        if set_name is not None and str(set_name).strip() != '':
+            normalized_set = str(set_name).strip().lower()
+            if normalized_set.endswith(' cards'):
+                normalized_set = normalized_set[:-6].strip()
+            selected_set = set_lookup.get(normalized_set)
+            if selected_set is None:
+                raise ValueError('set must be one of: Tarot/Tarots, Planet/Planets, Spectral/Spectrals')
+
+        allowed_sets = {'Tarot', 'Planet', 'Spectral'}
+        entries = []
+
+        for center_id, center_def in self.game_catalog.centers.items():
+            if center_def.set_name not in allowed_sets:
+                continue
+            if selected_set is not None and center_def.set_name != selected_set:
+                continue
+            if self._is_locked_center(center_id, center_def):
+                continue
+
+            try:
+                render = self.game_catalog.resolve_card_sprite(
+                    center_id=center_id,
+                    card_proto=None,
+                    base_suit=None,
+                    base_value=None,
+                    area_name='consumeables',
+                )
+            except Exception:
+                render = None
+
+            entries.append(
+                {
+                    'id': center_id,
+                    'name': center_def.name,
+                    'set': center_def.set_name,
+                    'order': center_def.order,
+                    'render': render,
+                }
+            )
+
+        entries.sort(
+            key=lambda item: (
+                {'Tarot': 1, 'Planet': 2, 'Spectral': 3}.get(item['set'], 99),
+                item['order'] if item['order'] is not None else 9999,
+                item['id'],
+            )
+        )
+        return entries
+
+    def add_consumeable(self, center_id):
+        center_def = self.game_catalog.centers.get(center_id)
+        if center_def is None:
+            raise ValueError(f'Unknown consumable center: {center_id}')
+        if center_def.set_name not in {'Tarot', 'Planet', 'Spectral'}:
+            raise ValueError(f'Center is not a consumable card: {center_id}')
+        if self._is_locked_center(center_id, center_def):
+            raise ValueError(f'Consumable is not available: {center_id}')
+
+        self._snapshot()
+        self.editor.ensure_required_card_areas()
+
+        current_count = self.editor.get_card_count('consumeables')
+        try:
+            current_slots = int(self.get_value(['GAME', 'starting_params', 'consumable_slots']))
+        except Exception:
+            current_slots = 2
+
+        if current_count + 1 > current_slots:
+            self.editor.set_consumable_slots(current_count + 1)
+
+        new_key = self.editor.add_consumeable_by_center(
+            center_id,
+            center_name=center_def.name,
+            center_set=center_def.set_name,
+            center_effect=center_def.effect,
+            consumeable_config=center_def.config_defaults,
+        )
+
+        added = self.find_card_by_key('consumeables', new_key)
+        if added:
+            try:
+                _k, card = self.editor._get_card_by_position('consumeables', int(added['index']))
+                self.editor.ensure_card_core_fields(card)
+                self.editor.ensure_card_schema(card, game_catalog=self.game_catalog)
+            except Exception:
+                pass
+
+        return {
+            'new_key': new_key,
+            'new_item': added,
+        }
+
     def set_probability_denominator(self, value):
         self._snapshot()
         self.editor.set_probability_denominator(value)
@@ -176,6 +339,79 @@ class EditorService(object):
     def god_unlock_everything(self):
         self._snapshot()
         self.editor.god_unlock_everything()
+
+    def add_consumeables_by_set(self, set_name):
+        self._snapshot()
+        self.editor.ensure_required_card_areas()
+
+        normalized_set = str(set_name or '').strip()
+        if normalized_set not in {'Tarot', 'Planet', 'Spectral'}:
+            raise ValueError('set_name must be one of: Tarot, Planet, Spectral')
+
+        targets = []
+        for center_id, center_def in self.game_catalog.centers.items():
+            if center_def.set_name != normalized_set:
+                continue
+            if center_def.name == 'Locked':
+                continue
+            if 'undiscovered' in center_id or center_id.endswith('_locked'):
+                continue
+            targets.append(center_def)
+
+        targets.sort(key=lambda center: ((center.order if center.order is not None else 9999), center.center_id))
+
+        existing_center_ids = {
+            card.get('center_id')
+            for card in self.list_cards('consumeables')
+            if card.get('center_id')
+        }
+
+        pending = [center for center in targets if center.center_id not in existing_center_ids]
+
+        if not pending:
+            return {
+                'category': normalized_set,
+                'added': 0,
+                'already_present': len(targets),
+                'target_total': len(targets),
+            }
+
+        current_count = self.editor.get_card_count('consumeables')
+        required_slots = current_count + len(pending)
+        try:
+            current_slots = int(self.get_value(['GAME', 'starting_params', 'consumable_slots']))
+        except Exception:
+            current_slots = 2
+
+        if required_slots > current_slots:
+            self.editor.set_consumable_slots(required_slots)
+
+        added = 0
+        for center in pending:
+            self.editor.add_consumeable_by_center(
+                center_id=center.center_id,
+                center_name=center.name,
+                center_set=center.set_name,
+                center_effect=center.effect,
+                consumeable_config=center.config_defaults,
+            )
+            added += 1
+
+        return {
+            'category': normalized_set,
+            'added': added,
+            'already_present': len(targets) - added,
+            'target_total': len(targets),
+        }
+
+    def god_add_tarots(self):
+        return self.add_consumeables_by_set('Tarot')
+
+    def god_add_planets(self):
+        return self.add_consumeables_by_set('Planet')
+
+    def god_add_spectrals(self):
+        return self.add_consumeables_by_set('Spectral')
 
     def get_value(self, keys):
         return self.editor.get_literal_value(keys)
@@ -415,7 +651,7 @@ class EditorService(object):
             return None
         text = str(edition).strip().lower()
         if not text:
-            return None
+            return ''
         aliases = {
             'holographic': 'holo',
         }
@@ -427,7 +663,7 @@ class EditorService(object):
             return None
         text = str(seal).strip()
         if not text:
-            return None
+            return ''
         return text.title()
 
     @staticmethod
@@ -534,10 +770,10 @@ class EditorService(object):
         if card_index < 1 or card_index > len(cards):
             return [f'Card index {card_index} is out of range for {area_name}.']
 
-        if edition is not None and edition not in self.game_catalog.editions:
+        if edition not in (None, '') and edition not in self.game_catalog.editions:
             errors.append(f'Invalid edition: {edition}')
 
-        if seal is not None and seal not in self.game_catalog.seals:
+        if seal not in (None, '') and seal not in self.game_catalog.seals:
             errors.append(f'Invalid seal: {seal}')
 
         known_stickers = set(self.get_catalog_payload()['stickers'])
@@ -565,7 +801,7 @@ class EditorService(object):
             if rank not in valid_ranks:
                 errors.append(f'Invalid rank: {rank}')
 
-        if enhancement is not None:
+        if enhancement is not None and str(enhancement).strip() != '':
             center = self.game_catalog.centers.get(enhancement)
             if not center or center.set_name != 'Enhanced':
                 errors.append(f'Invalid enhancement center: {enhancement}')
@@ -575,7 +811,12 @@ class EditorService(object):
     def _transform_preview_item(self, card, suit=None, rank=None, enhancement=None):
         next_suit = suit or card.get('base_suit')
         next_rank = rank or card.get('base_value')
-        next_center = enhancement or card.get('center_id')
+        if enhancement is None:
+            next_center = card.get('center_id')
+        elif str(enhancement).strip() == '':
+            next_center = 'c_base'
+        else:
+            next_center = enhancement
         next_center_name = self.game_catalog.center_name(next_center)
         return {
             'index': card.get('index'),
@@ -635,7 +876,8 @@ class EditorService(object):
             rank=rank,
             enhancement=enhancement,
         )
-        center_def = self.game_catalog.centers.get(enhancement) if enhancement else None
+        clear_enhancement = enhancement is not None and str(enhancement).strip() == ''
+        center_def = self.game_catalog.centers.get(enhancement) if enhancement and str(enhancement).strip() else None
 
         self._snapshot()
         changed = 0
@@ -643,7 +885,14 @@ class EditorService(object):
             if suit is not None or rank is not None:
                 if self.editor.set_card_face(area_name, index, suit=suit, rank=rank):
                     changed += 1
-            if enhancement is not None and center_def is not None:
+            if clear_enhancement:
+                if self.editor.clear_card_enhancement(
+                    area_name,
+                    index,
+                    center_name=self.game_catalog.center_name('c_base'),
+                ):
+                    changed += 1
+            elif enhancement is not None and center_def is not None:
                 if self.editor.set_card_enhancement(
                     area_name,
                     index,
