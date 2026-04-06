@@ -592,16 +592,22 @@ class GameCoreCatalog:
         }
 
     def _resolve_center_atlas_name(self, center: CenterDef) -> str:
-        if center.atlas_name:
+        # Balatro core aliases Planet/Spectral to Tarot and reads all three from Tarots.png.
+        if center.set_name in ('Tarot', 'Planet', 'Spectral') and 'Tarot' in self.atlases:
+            return 'Tarot'
+
+        if center.atlas_name and center.atlas_name in self.atlases:
             return center.atlas_name
-        if center.set_name in ('Joker', 'Voucher', 'Tarot', 'Booster'):
+
+        if center.set_name in self.atlases:
             return center.set_name
+
         return 'centers'
 
     def resolve_card_sprite(self, center_id: Optional[str], card_proto: Optional[str], base_suit: Optional[str], base_value: Optional[str], area_name: Optional[str] = None):
         center_def = self.centers.get(center_id) if center_id else None
         center_set = center_def.set_name if center_def else None
-        is_joker_or_consumable = (area_name in ('jokers', 'consumeables')) or (center_set in ('Joker', 'Voucher', 'Tarot', 'Booster'))
+        is_joker_or_consumable = (area_name in ('jokers', 'consumeables')) or (center_set in ('Joker', 'Voucher', 'Tarot', 'Planet', 'Spectral', 'Booster'))
 
         if is_joker_or_consumable:
             if center_id and center_id in self.centers:
@@ -650,6 +656,18 @@ class GameCoreCatalog:
             # Allow fallback to center id if card proto is missing but it has a center
             if center_id and center_id in self.centers:
                 center = self.centers[center_id]
+                if center.set_name == 'Enhanced':
+                    atlas = self._atlas_payload('cards_1')
+                    fallback_card = self.cards.get('H_2')
+                    if not fallback_card and self.cards:
+                        fallback_card = next(iter(self.cards.values()))
+                    if atlas and fallback_card:
+                        return {
+                            'atlas': atlas,
+                            'x': fallback_card.pos_x,
+                            'y': fallback_card.pos_y,
+                            'source': 'P_CARDS_FALLBACK',
+                        }
                 if center.pos_x is None or center.pos_y is None:
                     return None
                 atlas_name = self._resolve_center_atlas_name(center)
@@ -702,8 +720,25 @@ class GameCoreCatalog:
                 'y': int(sticker['y']),
             }
 
+        enhancements = {}
+        for center_id, center in self.centers.items():
+            if center.set_name != 'Enhanced':
+                continue
+            if center.pos_x is None or center.pos_y is None:
+                continue
+            atlas_name = self._resolve_center_atlas_name(center)
+            atlas = self._atlas_payload(atlas_name)
+            if not atlas:
+                continue
+            enhancements[center_id] = {
+                'atlas': atlas,
+                'x': center.pos_x,
+                'y': center.pos_y,
+            }
+
         return {
             'editions': editions,
             'seals': seals,
             'stickers': stickers,
+            'enhancements': enhancements,
         }
