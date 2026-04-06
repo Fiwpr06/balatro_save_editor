@@ -4,17 +4,73 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Balatro Save Editor (Web)</title>
+    <link rel="icon" type="image/x-icon" href="/static/favicon.ico" />
     <link rel="stylesheet" href="/static/styles.css" />
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@7.1.0/css/all.min.css"
+    />
   </head>
   <body>
     <div class="app-shell">
       <aside class="sidebar">
         <h1>BALATRO<br />SAVE EDITOR</h1>
         <p class="muted">Web UI • Backend preserved</p>
-        <button class="nav-btn active" data-view="dashboard">Dashboard</button>
-        <button class="nav-btn" data-view="jokers">Joker Editor</button>
-        <button class="nav-btn" data-view="cards">Card Editor</button>
-        <button class="nav-btn" data-view="godmode">God Mode</button>
+        <div class="sidebar-nav">
+          <button class="nav-btn active" data-view="dashboard">
+            <span class="nav-btn-icon" aria-hidden="true"
+              ><i class="fa-solid fa-bars-progress"></i
+            ></span>
+            <span class="nav-btn-label">Overview</span>
+          </button>
+          <button class="nav-btn" data-view="jokers">
+            <span class="nav-btn-icon" aria-hidden="true"
+              ><i class="fa-solid fa-theater-masks"></i
+            ></span>
+            <span class="nav-btn-label">Jokers</span>
+          </button>
+          <button class="nav-btn" data-view="cards">
+            <span class="nav-btn-icon" aria-hidden="true"
+              ><i class="fa-solid fa-clone"></i
+            ></span>
+            <span class="nav-btn-label">Cards</span>
+          </button>
+          <button class="nav-btn" data-view="voucher-cheats">
+            <span class="nav-btn-icon" aria-hidden="true"
+              ><i class="fa-solid fa-ticket"></i
+            ></span>
+            <span class="nav-btn-label">Vouchers</span>
+          </button>
+          <button class="nav-btn" data-view="consumables-cheats">
+            <span class="nav-btn-icon" aria-hidden="true"
+              ><i class="fa-solid fa-star-and-crescent"></i
+            ></span>
+            <span class="nav-btn-label">Consumables</span>
+          </button>
+          <button class="nav-btn" data-view="godmode">
+            <span class="nav-btn-icon" aria-hidden="true"
+              ><i class="fa-solid fa-crown"></i
+            ></span>
+            <span class="nav-btn-label">God</span>
+          </button>
+        </div>
+        <div class="sidebar-external-link">
+          <a
+            class="nav-btn nav-link nav-btn-external"
+            href="/collection-editor"
+          >
+            <span class="external-link-icon" aria-hidden="true">
+              <i class="fa-solid fa-user"></i>
+            </span>
+            <span class="external-link-copy">
+              <span class="external-link-title">Collection & Profile</span>
+              <span class="external-link-subtitle"
+                >Collection tracker + profile tools</span
+              >
+            </span>
+            <span class="external-link-arrow" aria-hidden="true">↗</span>
+          </a>
+        </div>
       </aside>
 
       <main class="main-panel">
@@ -23,27 +79,38 @@
             <h2>Current Save</h2>
             <div id="savePath" class="muted">No save file loaded</div>
           </div>
-          
+
           <div class="top-actions">
             <!-- Hidden file input -->
-            <input type="file" id="fileUploadInput" accept=".jkr" style="display: none;" />
+            <input
+              type="file"
+              id="fileUploadInput"
+              accept=".jkr"
+              style="display: none"
+            />
             <button id="uploadSaveBtn">Upload Save File</button>
             <button id="saveChangesBtn">Download Modified Save</button>
-            
-            <span class="divider"></span>
-            
-            <button id="undoLastChangeBtn">Undo Last Change</button>
-            <button id="viewBackupHistoryBtn" style="display:none;">View Backup History</button>
-            <select id="backupHistorySelect" style="display:none;"></select>
-            <button id="restoreBackupBtn" style="display:none;">Restore Backup</button>
-          </div>
 
+            <span class="divider"></span>
+
+            <button id="undoLastChangeBtn">Undo Last Change</button>
+            <button id="viewBackupHistoryBtn" style="display: none">
+              View Backup History
+            </button>
+            <select id="backupHistorySelect" style="display: none"></select>
+            <button id="restoreBackupBtn" style="display: none">
+              Restore Backup
+            </button>
+          </div>
         </header>
 
         <div id="toast-container" aria-live="polite" aria-atomic="false"></div>
 
         <section id="dashboard" class="view active">
-          <h3>Dashboard</h3>
+          <h3>
+            <i class="fa-solid fa-bars-progress section-title-icon"></i>
+            Overview
+          </h3>
           <div class="grid-3">
             <div class="card">
               <div class="label">Money</div>
@@ -102,7 +169,10 @@
         </section>
 
         <section id="jokers" class="view">
-          <h3>Joker Editor</h3>
+          <h3>
+            <i class="fa-solid fa-theater-masks section-title-icon"></i>
+            Jokers
+          </h3>
           <div class="split">
             <div class="card">
               <div class="row">
@@ -113,54 +183,66 @@
             </div>
             <div class="card">
               <h4>Edit Joker</h4>
-              <label
-                >Edition
-                <select id="jokerEdition"></select>
-              </label>
-              <label
-                >Seal
-                <select id="jokerSeal"></select>
-              </label>
-              <div id="jokerStickers" class="checks"></div>
-              <label
-                >Apply to
-                <select id="jokerApplyScope">
-                  <option value="selected">Selected only</option>
-                  <option value="same_id">Same ID</option>
-                  <option value="all">All</option>
-                </select>
-              </label>
+              <div class="editor-section">
+                <h5>Core Properties</h5>
+                <label
+                  >Edition
+                  <select id="jokerEdition"></select>
+                </label>
+              </div>
+              <div class="editor-section">
+                <h5>Flags</h5>
+                <div id="jokerStickers" class="checks"></div>
+              </div>
+              <div class="editor-section">
+                <label
+                  >Apply to
+                  <select id="jokerApplyScope">
+                    <option value="selected">Selected only</option>
+                    <option value="same_id">Same ID</option>
+                    <option value="all">All</option>
+                  </select>
+                </label>
+              </div>
               <div class="row">
-                <button id="previewJokerBtn">Preview Changes</button>
                 <button id="applyJokerBtn">Apply Changes</button>
                 <button id="removeJokerBtn" class="danger">Remove Joker</button>
               </div>
-              <pre id="jokerPreview" class="preview"></pre>
             </div>
           </div>
           <div class="card">
             <h4>Add Joker</h4>
-            <div class="form-grid">
-              <label
+            <div class="add-joker-toolbar">
+              <label class="add-joker-field add-joker-field-main"
                 >Joker
                 <select id="addJokerSelect"></select>
               </label>
-              <label
+              <label class="add-joker-field"
                 >Edition
                 <select id="addJokerEdition"></select>
               </label>
-              <label
-                >Seal
-                <select id="addJokerSeal"></select>
-              </label>
+              <button id="addJokerBtn" class="add-joker-submit">
+                <i class="fa-solid fa-plus" aria-hidden="true"></i>
+                <span>Add Joker</span>
+              </button>
             </div>
-            <div id="addJokerStickers" class="checks"></div>
-            <button id="addJokerBtn">Add Joker</button>
+            <div class="add-joker-stickers-wrap">
+              <span class="muted add-joker-stickers-title"
+                >Sticker Flags (optional)</span
+              >
+              <div
+                id="addJokerStickers"
+                class="checks add-joker-stickers"
+              ></div>
+            </div>
           </div>
         </section>
 
         <section id="cards" class="view">
-          <h3>Card Editor (Deck / Hand / Consumables)</h3>
+          <h3>
+            <i class="fa-solid fa-clone section-title-icon"></i>
+            Cards
+          </h3>
           <div class="card">
             <label
               >Area
@@ -172,7 +254,7 @@
             </label>
             <button id="refreshCardsBtn">Refresh Cards</button>
           </div>
-          <div class="split">
+          <div class="split split-cards">
             <div class="card">
               <div id="cardList" class="visual-list"></div>
             </div>
@@ -227,18 +309,18 @@
               </div>
 
               <div class="row">
-                <button id="previewCardBtn">Preview</button>
                 <button id="applyCardBtn">Apply</button>
                 <button id="removeCardBtn" class="danger">Remove Card</button>
               </div>
-
-              <pre id="cardPreview" class="preview"></pre>
             </div>
           </div>
         </section>
 
         <section id="godmode" class="view">
-          <h3>God Mode / Cheats</h3>
+          <h3>
+            <i class="fa-solid fa-crown section-title-icon"></i>
+            God
+          </h3>
           <div class="grid-3">
             <button data-action="infinite_resources" class="cheat-btn">
               Infinite Resources
@@ -251,9 +333,96 @@
             <button data-action="guaranteed_rng" class="cheat-btn">
               Guaranteed RNG
             </button>
-            <button data-action="unlock_vouchers" class="cheat-btn">
-              Unlock All Vouchers
-            </button>
+          </div>
+        </section>
+
+        <section id="voucher-cheats" class="view">
+          <h3>
+            <i class="fa-solid fa-ticket section-title-icon"></i>
+            Vouchers
+          </h3>
+          <div class="card godmode-block">
+            <h4>Voucher Tools</h4>
+            <div class="split split-godmode">
+              <div>
+                <h5 class="godmode-subtitle">Voucher Pool</h5>
+                <div id="voucherCatalogStats" class="muted">
+                  Loading voucher pool...
+                </div>
+                <div
+                  id="voucherCatalogList"
+                  class="visual-list visual-list-short"
+                ></div>
+                <div class="row">
+                  <button id="unlockVoucherBtn">Unlock Selected Voucher</button>
+                  <button id="refreshVoucherBtn">Refresh Voucher Pool</button>
+                </div>
+              </div>
+
+              <div>
+                <h5 class="godmode-subtitle">Unlocked Vouchers</h5>
+                <div id="voucherOwnedStats" class="muted">
+                  Showing vouchers currently unlocked in your save
+                </div>
+                <div
+                  id="voucherOwnedList"
+                  class="visual-list visual-list-short"
+                ></div>
+                <div class="row">
+                  <button id="unlockAllVouchersBtn">Unlock All Vouchers</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section id="consumables-cheats" class="view">
+          <h3>
+            <i class="fa-solid fa-star-and-crescent section-title-icon"></i>
+            Consumables
+          </h3>
+          <div class="card godmode-block">
+            <h4>Consumable Tools</h4>
+            <div class="split split-godmode">
+              <div>
+                <h5 class="godmode-subtitle">Consumable Pool</h5>
+                <div class="form-grid">
+                  <label
+                    >Type
+                    <select id="consumeableSetSelect">
+                      <option value="tarot">Tarot Cards</option>
+                      <option value="planet">Planet Cards</option>
+                      <option value="spectral">Spectral Cards</option>
+                    </select>
+                  </label>
+                </div>
+                <div id="consumeablePoolStats" class="muted">
+                  Select a type to load available consumables
+                </div>
+                <div
+                  id="consumeableCatalogList"
+                  class="visual-list visual-list-short"
+                ></div>
+                <div class="row">
+                  <button id="addConsumeableBtn">Add Selected Card</button>
+                  <button id="refreshConsumeablePoolBtn">Refresh Pool</button>
+                </div>
+              </div>
+
+              <div>
+                <h5 class="godmode-subtitle">Current Consumables</h5>
+                <div id="consumeableOwnedStats" class="muted">
+                  Showing consumables currently in your save
+                </div>
+                <div
+                  id="consumeableOwnedList"
+                  class="visual-list visual-list-short"
+                ></div>
+                <div class="row">
+                  <button id="refreshConsumeablesBtn">Refresh Current</button>
+                </div>
+              </div>
+            </div>
           </div>
         </section>
       </main>
