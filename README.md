@@ -1,83 +1,97 @@
-# balatro_save_editor
+# Balatro Save Editor
 
-Balatro save editor with 3 interfaces over one shared backend:
+Balatro save editor with shared core logic and a web-first entrypoint:
 
-- CLI: `main.py`
-- Desktop GUI (PyQt6): `gui.py`
-- Web app (Flask): `web.py`
+- Web app (Flask): `main.py`
 
-The project keeps the save format intact (compressed Lua-like table text inside `.jkr`) and edits data through parser-based transforms.
+The project preserves the `.jkr` save format (compressed Lua-like table text) and applies parser-based transforms instead of destructive rewrites.
+
+## Web Modes
+
+After starting `python main.py`, you get:
+
+- Save Mode: `http://127.0.0.1:5000/`
+- Collection & Profile Mode: `http://127.0.0.1:5000/collection-editor`
 
 ## Features
 
-- Economy and round stats editing (money, chips, hands/discards, reroll, blind target)
-- Card area editing (`deck`, `hand`, `jokers`, `consumeables`)
-- Joker add/remove and card modifier editing (edition, seal, stickers)
-- Scoped apply (`selected`, `same_id`, `all`) in Card Properties
-- Backup, restore, and undo
-- Save validation before write
+### Save Mode
 
-## Project Structure
+- Resource and capacity editing (money, chips, reroll cost, hands/discards, slot limits)
+- Card area editing for `deck`, `hand`, `jokers`, and `consumeables`
+- Joker/Card editing with scoped apply (`selected`, `same_id`, `all`)
+- Voucher tools (catalog, unlock selected, unlock all)
+- Consumable tools (Tarot/Planet/Spectral pool, add selected, refresh current)
+- God actions and utility actions
+- Backup history, restore backup, and undo last in-memory change
+- Save validation before write/download
 
-- `core/`: parser/editor/validation logic
-- `services/`: service layer used by CLI/GUI/Web
-- `ui/`: PyQt6 interface
-- `webapp/`: Flask routes + static web UI
-- `utils/`: input helpers for CLI
+### Collection & Profile Mode
 
-## Dependencies
+- Collection state editor (unlock/discover/alert flow)
+- Import/export `.jkr` directly in browser
+- Profile editor for high scores, career stats, progress, deck usage, joker/consumable usage
+- Mobile-friendly sidebar and category navigation
 
-- Python 3.10+
-- Web mode: `Flask`
-- GUI mode: `PyQt6`
-- Optional CLI colors: `colorama`
+### Data Fidelity
 
-Install example:
+- Uses `Balatro-Core` metadata and texture atlas mapping for render payloads
+- Planet/Spectral consumables are resolved with Tarot atlas (`Tarots.png`) to match Balatro core behavior
+
+## Requirements
+
+- Python 3.10+ (3.11 recommended)
+- Dependencies in `requirements.txt`:
+  - `Flask`
+  - `gunicorn` (production)
+
+Install:
 
 ```bash
-pip install flask pyqt6 colorama
+pip install -r requirements.txt
 ```
 
 ## Run
 
-### CLI
+### Web (Local)
 
 ```bash
 python main.py
 ```
 
-### Desktop GUI
+Open:
+
+- `http://127.0.0.1:5000/`
+- `http://127.0.0.1:5000/collection-editor`
+
+### Web (Render / Production)
+
+Do not use Flask development server in production. Use Gunicorn:
 
 ```bash
-python gui.py
+gunicorn main:app --bind 0.0.0.0:${PORT:-10000} --workers ${WEB_CONCURRENCY:-1}
 ```
 
-### Web
+`render.yaml` already contains this setup.
 
-```bash
-python web.py
-```
+## Balatro-Core Requirement
 
-Open `http://127.0.0.1:5000`.
+`Balatro-Core/` is required for web runtime because upload/session initialization and render asset mapping depend on game data.
 
-For Render production deploy, do not run Flask development server (`python web.py`).
-Use Gunicorn as Start Command:
+If this directory is missing in deployment, upload will fail with a server-side error.
 
-```bash
-gunicorn web:app --bind 0.0.0.0:${PORT:-10000} --workers ${WEB_CONCURRENCY:-1}
-```
+## Project Structure
 
-This repository includes a `render.yaml` blueprint with this configuration.
-
-If your Render service was created manually before adding `render.yaml`, update the service Start Command in Render dashboard to the command above.
-
-## Balatro-Core Integration
-
-The editor supports data-driven mapping from extracted game source (`Balatro-Core/*.lua`) when the folder is present locally.
-
-`Balatro-Core/` is intentionally git-ignored because it is external game data.
+- `core/`: parser/editor/validation and core catalog logic
+- `services/`: service layer used by Web
+- `webapp/`: Flask routes, templates, and static assets
+  - `templates/index.html`: Save Mode UI
+  - `templates/collection_editor.html`: Collection/Profile UI
+  - `static/collection-editor/`: collection/profile frontend bundle
+- `ui/`: reserved legacy UI folder (no active desktop launcher)
 
 ## Git Notes
 
-- `Balatro-Core/` is ignored in `.gitignore`
-- local caches (`__pycache__`, `*.pyc`) are ignored
+- Python caches are ignored (`__pycache__`, `*.pyc`)
+- virtual env folders are ignored (`.venv/`, `venv/`)
+- editor/OS temp files are ignored (`.vscode/`, `.DS_Store`, `Thumbs.db`)
