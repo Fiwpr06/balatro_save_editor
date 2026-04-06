@@ -4,6 +4,12 @@ const state = {
   textureScale: 2,
   jokers: [],
   cards: [],
+  voucherCatalog: [],
+  voucherOwned: [],
+  selectedVoucherCatalogIndex: null,
+  consumeableCatalog: [],
+  consumeableOwned: [],
+  selectedConsumeableCatalogIndex: null,
   selectedJokerIndex: null,
   selectedCardIndex: null,
   backups: [],
@@ -71,6 +77,135 @@ function toast(message, level = "info") {
     return;
   }
   showToast(message, level || "info");
+}
+
+const APPLY_SCOPE_LABELS = {
+  selected: "Selected only",
+  same_id: "Same ID",
+  all: "All",
+};
+
+function formatApplyScope(scope) {
+  return APPLY_SCOPE_LABELS[scope] || scope || APPLY_SCOPE_LABELS.selected;
+}
+
+function showConfirmDialog(options = {}) {
+  const {
+    title = "Confirm Action",
+    message = "Are you sure you want to continue?",
+    details = [],
+    confirmText = "Confirm",
+    cancelText = "Cancel",
+    tone = "warning",
+  } = options;
+
+  return new Promise((resolve) => {
+    const existing = document.querySelector(".confirm-overlay");
+    if (existing) {
+      existing.remove();
+    }
+
+    const overlay = document.createElement("div");
+    overlay.className = "confirm-overlay";
+
+    const dialog = document.createElement("div");
+    dialog.className = `confirm-dialog confirm-${tone}`;
+    dialog.setAttribute("role", "alertdialog");
+    dialog.setAttribute("aria-modal", "true");
+
+    const head = document.createElement("div");
+    head.className = "confirm-head";
+
+    const icon = document.createElement("span");
+    icon.className = "confirm-icon";
+    icon.textContent = tone === "danger" ? "!" : "?";
+
+    const titleNode = document.createElement("h4");
+    titleNode.className = "confirm-title";
+    titleNode.textContent = title;
+
+    head.appendChild(icon);
+    head.appendChild(titleNode);
+
+    const messageNode = document.createElement("p");
+    messageNode.className = "confirm-message";
+    messageNode.textContent = message;
+
+    dialog.appendChild(head);
+    dialog.appendChild(messageNode);
+
+    const cleanedDetails = details
+      .map((line) => String(line || "").trim())
+      .filter(Boolean);
+
+    if (cleanedDetails.length) {
+      const detailList = document.createElement("ul");
+      detailList.className = "confirm-details";
+
+      cleanedDetails.forEach((line) => {
+        const li = document.createElement("li");
+        li.textContent = line;
+        detailList.appendChild(li);
+      });
+
+      dialog.appendChild(detailList);
+    }
+
+    const actions = document.createElement("div");
+    actions.className = "confirm-actions";
+
+    const cancelBtn = document.createElement("button");
+    cancelBtn.type = "button";
+    cancelBtn.className = "confirm-btn cancel";
+    cancelBtn.textContent = cancelText;
+
+    const confirmBtn = document.createElement("button");
+    confirmBtn.type = "button";
+    confirmBtn.className = "confirm-btn confirm";
+    confirmBtn.textContent = confirmText;
+
+    actions.appendChild(cancelBtn);
+    actions.appendChild(confirmBtn);
+    dialog.appendChild(actions);
+    overlay.appendChild(dialog);
+    document.body.appendChild(overlay);
+
+    let settled = false;
+
+    const finish = (result) => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      document.removeEventListener("keydown", onKeydown);
+      overlay.classList.add("is-closing");
+      setTimeout(() => {
+        overlay.remove();
+        resolve(result);
+      }, 140);
+    };
+
+    const onKeydown = (event) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        finish(false);
+      } else if (event.key === "Enter") {
+        event.preventDefault();
+        finish(true);
+      }
+    };
+
+    overlay.addEventListener("click", (event) => {
+      if (event.target === overlay) {
+        finish(false);
+      }
+    });
+
+    cancelBtn.addEventListener("click", () => finish(false));
+    confirmBtn.addEventListener("click", () => finish(true));
+    document.addEventListener("keydown", onKeydown);
+    confirmBtn.focus();
+  });
 }
 
 function sleep(ms) {
@@ -178,13 +313,16 @@ function buildModifierPayload(area, cardIndex, prefix) {
   const uiEdition = el(`${prefix}Edition`).value || "";
   const currentEdition = selected.edition || "";
   if (uiEdition !== currentEdition) {
-    payload.edition = uiEdition || null;
+    payload.edition = uiEdition;
   }
 
-  const uiSeal = el(`${prefix}Seal`).value || "";
-  const currentSeal = selected.seal || "";
-  if (uiSeal !== currentSeal) {
-    payload.seal = uiSeal || null;
+  const sealSelect = el(`${prefix}Seal`);
+  if (prefix !== "joker" && sealSelect) {
+    const uiSeal = sealSelect.value || "";
+    const currentSeal = selected.seal || "";
+    if (uiSeal !== currentSeal) {
+      payload.seal = uiSeal;
+    }
   }
 
   const stickerDelta = changedStickerValues(
@@ -226,7 +364,7 @@ function buildTransformPayload(area, cardIndex) {
     ? selected.center_id
     : "";
   if (uiEnhancement !== currentEnhancement) {
-    payload.enhancement = uiEnhancement || null;
+    payload.enhancement = uiEnhancement;
   }
 
   return payload;
@@ -254,7 +392,10 @@ function syncEditorControls(prefix, card) {
   }
   const selected = card || {};
   el(`${prefix}Edition`).value = selected.edition || "";
-  el(`${prefix}Seal`).value = selected.seal || "";
+  const sealSelect = el(`${prefix}Seal`);
+  if (sealSelect) {
+    sealSelect.value = selected.seal || "";
+  }
   renderStickerChecks(
     el(`${prefix}Stickers`),
     state.catalog.stickers,
@@ -285,12 +426,25 @@ function renderCardList(listId, items, selectedIndex, onSelect) {
     (state.assets && state.assets.overlays) ||
     {};
 
-  const spriteBoxStyle = (sprite, ratio = 0.48) => {
+  const atlasScale = (atlas) => {
+    if (atlas && atlas.path) {
+      const match = String(atlas.path).match(/\/(\d+)x\//);
+      if (match) {
+        const parsed = Number.parseInt(match[1], 10);
+        if (Number.isFinite(parsed) && parsed > 0) {
+          return parsed;
+        }
+      }
+    }
+    return state.textureScale || 2;
+  };
+
+  const spriteBoxStyle = (sprite, ratio = 0.56) => {
     if (!sprite || !sprite.atlas) {
-      return "width:88px;height:120px;background:linear-gradient(145deg,#2b2538,#1a1622);";
+      return "width:96px;height:132px;background:linear-gradient(145deg,#233246,#151f2d);";
     }
     const atlas = sprite.atlas;
-    const sheetScale = state.textureScale || 2;
+    const sheetScale = atlasScale(atlas);
     const frameW = atlas.px * sheetScale;
     const frameH = atlas.py * sheetScale;
     const width = Math.round(frameW * ratio);
@@ -298,12 +452,12 @@ function renderCardList(listId, items, selectedIndex, onSelect) {
     return [`width:${width}px`, `height:${height}px`].join(";");
   };
 
-  const spriteFrameStyle = (sprite, ratio = 0.48) => {
+  const spriteFrameStyle = (sprite, ratio = 0.56) => {
     if (!sprite || !sprite.atlas) {
       return "";
     }
     const atlas = sprite.atlas;
-    const sheetScale = state.textureScale || 2;
+    const sheetScale = atlasScale(atlas);
     const frameW = atlas.px * sheetScale;
     const frameH = atlas.py * sheetScale;
     return [
@@ -318,15 +472,18 @@ function renderCardList(listId, items, selectedIndex, onSelect) {
     ].join(";");
   };
 
-  const badgeFrameStyle = (sprite) => {
+  const badgeFrameStyle = (sprite, boxSize = 20) => {
     if (!sprite || !sprite.atlas) {
       return "";
     }
     const atlas = sprite.atlas;
-    const sheetScale = state.textureScale || 2;
+    const sheetScale = atlasScale(atlas);
     const frameW = atlas.px * sheetScale;
     const frameH = atlas.py * sheetScale;
-    const ratio = Math.min(16 / Math.max(frameW, 1), 16 / Math.max(frameH, 1));
+    const ratio = Math.min(
+      boxSize / Math.max(frameW, 1),
+      boxSize / Math.max(frameH, 1),
+    );
     return [
       `width:${frameW}px`,
       `height:${frameH}px`,
@@ -338,6 +495,24 @@ function renderCardList(listId, items, selectedIndex, onSelect) {
     ].join(";");
   };
 
+  const editionClassFor = (editionType) => {
+    const normalized = String(editionType || "").toLowerCase();
+    if (normalized === "foil") return "edition-foil";
+    if (normalized === "holo") return "edition-holo";
+    if (normalized === "polychrome") return "edition-polychrome";
+    if (normalized === "negative") return "edition-negative";
+    return "";
+  };
+
+  const collectionSets = new Set([
+    "Joker",
+    "Voucher",
+    "Tarot",
+    "Planet",
+    "Spectral",
+    "Booster",
+  ]);
+
   items.forEach((item) => {
     const row = document.createElement("div");
     row.className = `visual-card ${item.index === selectedIndex ? "selected" : ""}`;
@@ -347,43 +522,49 @@ function renderCardList(listId, items, selectedIndex, onSelect) {
     sprite.className = "visual-sprite";
     sprite.setAttribute("style", spriteBoxStyle(item.render));
 
+    const enhancementSprite =
+      item.center_set === "Enhanced" && item.center_id && overlays.enhancements
+        ? overlays.enhancements[item.center_id]
+        : null;
+    if (enhancementSprite) {
+      const enhancementFrame = document.createElement("div");
+      enhancementFrame.className =
+        "visual-sprite-frame visual-enhancement-overlay";
+      enhancementFrame.title = `Enhancement: ${item.center_name || item.center_id}`;
+      enhancementFrame.setAttribute(
+        "style",
+        spriteFrameStyle(enhancementSprite),
+      );
+      sprite.appendChild(enhancementFrame);
+    }
+
     if (item.render && item.render.atlas) {
       const spriteFrame = document.createElement("div");
-      spriteFrame.className = "visual-sprite-frame";
+      spriteFrame.className = "visual-sprite-frame visual-sprite-base";
       spriteFrame.setAttribute("style", spriteFrameStyle(item.render));
       sprite.appendChild(spriteFrame);
     }
 
-    const badges = document.createElement("div");
-    badges.className = "visual-overlay-badges";
-
-    const editionSprite =
-      item.edition && overlays.editions
-        ? overlays.editions[item.edition]
-        : null;
-    if (editionSprite) {
-      const badge = document.createElement("div");
-      badge.className = "visual-badge";
-      badge.title = `Edition: ${item.edition}`;
-      const frame = document.createElement("div");
-      frame.className = "visual-badge-frame";
-      frame.setAttribute("style", badgeFrameStyle(editionSprite));
-      badge.appendChild(frame);
-      badges.appendChild(badge);
+    const editionClass = editionClassFor(item.edition);
+    if (editionClass) {
+      sprite.classList.add(editionClass);
+      const editionOverlay = document.createElement("div");
+      editionOverlay.className = `visual-edition-overlay ${editionClass}`;
+      sprite.appendChild(editionOverlay);
     }
 
     const sealSprite =
       item.seal && overlays.seals ? overlays.seals[item.seal] : null;
     if (sealSprite) {
-      const badge = document.createElement("div");
-      badge.className = "visual-badge";
-      badge.title = `Seal: ${item.seal}`;
-      const frame = document.createElement("div");
-      frame.className = "visual-badge-frame";
-      frame.setAttribute("style", badgeFrameStyle(sealSprite));
-      badge.appendChild(frame);
-      badges.appendChild(badge);
+      const sealFrame = document.createElement("div");
+      sealFrame.className = "visual-sprite-frame visual-seal-overlay";
+      sealFrame.title = `Seal: ${item.seal}`;
+      sealFrame.setAttribute("style", spriteFrameStyle(sealSprite));
+      sprite.appendChild(sealFrame);
     }
+
+    const badges = document.createElement("div");
+    badges.className = "visual-overlay-badges";
 
     Object.entries(item.stickers || {})
       .filter(([, enabled]) => !!enabled)
@@ -391,12 +572,12 @@ function renderCardList(listId, items, selectedIndex, onSelect) {
         const stickerSprite =
           overlays.stickers && overlays.stickers[stickerName];
         const badge = document.createElement("div");
-        badge.className = "visual-badge";
+        badge.className = "visual-badge badge-sticker";
         badge.title = `Sticker: ${stickerName}`;
         if (stickerSprite) {
           const frame = document.createElement("div");
           frame.className = "visual-badge-frame";
-          frame.setAttribute("style", badgeFrameStyle(stickerSprite));
+          frame.setAttribute("style", badgeFrameStyle(stickerSprite, 18));
           badge.appendChild(frame);
         } else {
           badge.textContent = "•";
@@ -404,14 +585,51 @@ function renderCardList(listId, items, selectedIndex, onSelect) {
         badges.appendChild(badge);
       });
 
-    sprite.appendChild(badges);
+    if (badges.children.length) {
+      sprite.appendChild(badges);
+    }
+
+    const cardFaceName =
+      item.base_value && item.base_suit
+        ? `${item.base_value} ${item.base_suit}`
+        : "";
+    const preferCenterName = collectionSets.has(String(item.center_set || ""));
+    const titleText = preferCenterName
+      ? item.center_name || item.name || item.id || item.key || cardFaceName
+      : cardFaceName || item.center_name || item.name || item.id || item.key;
 
     const title = document.createElement("div");
     title.className = "visual-title";
-    title.textContent = `${item.center_name || item.name || item.id || item.key}`;
+    title.textContent = titleText;
+
+    const chipRow = document.createElement("div");
+    chipRow.className = "visual-chip-row";
+    if (item.center_set === "Enhanced") {
+      const chip = document.createElement("span");
+      chip.className = "visual-chip enhancement";
+      chip.textContent = `Enhancement: ${item.center_name || item.center_id}`;
+      chipRow.appendChild(chip);
+    }
+    if (item.edition) {
+      const chip = document.createElement("span");
+      chip.className = "visual-chip edition";
+      chip.textContent = `Edition: ${item.edition}`;
+      chipRow.appendChild(chip);
+    }
+    if (item.seal) {
+      const chip = document.createElement("span");
+      chip.className = "visual-chip seal";
+      chip.textContent = `Seal: ${item.seal}`;
+      chipRow.appendChild(chip);
+    }
+
+    row.title = title.textContent;
 
     row.appendChild(sprite);
     row.appendChild(title);
+    if (chipRow.children.length) {
+      row.appendChild(chipRow);
+    }
     list.appendChild(row);
   });
 }
@@ -433,11 +651,9 @@ async function loadCatalog() {
   }));
 
   fillSelect(el("jokerEdition"), editions, true);
-  fillSelect(el("jokerSeal"), seals, true);
   fillSelect(el("cardEdition"), editions, true);
   fillSelect(el("cardSeal"), seals, true);
   fillSelect(el("addJokerEdition"), editions, true);
-  fillSelect(el("addJokerSeal"), seals, true);
 
   renderStickerChecks(el("jokerStickers"), state.catalog.stickers, {});
   renderStickerChecks(el("cardStickers"), state.catalog.stickers, {});
@@ -562,12 +778,223 @@ async function refreshCards() {
   syncEditorControls("card", selected);
 }
 
+function consumeableCatalogToVisualItems(items) {
+  return (items || []).map((entry, index) => ({
+    index: index + 1,
+    key: entry.id,
+    id: entry.id,
+    center_id: entry.id,
+    center_name: entry.name,
+    center_set: entry.set,
+    render: entry.render || null,
+    stickers: {},
+  }));
+}
+
+function voucherCatalogToVisualItems(items) {
+  return (items || []).map((entry, index) => ({
+    index: index + 1,
+    key: entry.id,
+    id: entry.id,
+    center_id: entry.id,
+    center_name: entry.name,
+    center_set: "Voucher",
+    render: entry.render || null,
+    enabled: !!entry.enabled,
+    stickers: {},
+  }));
+}
+
+function normalizeConsumeableSetKey(raw) {
+  const value = String(raw || "")
+    .trim()
+    .toLowerCase();
+
+  if (value === "tarot" || value === "tarots") {
+    return "tarot";
+  }
+  if (value === "planet" || value === "planets") {
+    return "planet";
+  }
+  if (value === "spectral" || value === "spectrals") {
+    return "spectral";
+  }
+  return "tarot";
+}
+
+function consumeableSetLabel(setKey) {
+  if (setKey === "planet") {
+    return "Planet Cards";
+  }
+  if (setKey === "spectral") {
+    return "Spectral Cards";
+  }
+  return "Tarot Cards";
+}
+
+async function refreshVoucherCatalog() {
+  const listNode = el("voucherCatalogList");
+  const ownedNode = el("voucherOwnedList");
+  if (!listNode || !ownedNode) {
+    return;
+  }
+
+  const selectedVoucher = state.voucherCatalog.find(
+    (entry) => entry.index === state.selectedVoucherCatalogIndex,
+  );
+  const previousVoucherId = selectedVoucher ? selectedVoucher.center_id : "";
+
+  const payload = await api("/api/vouchers");
+  state.voucherCatalog = voucherCatalogToVisualItems(payload.items || []);
+  state.voucherOwned = state.voucherCatalog.filter((entry) => !!entry.enabled);
+
+  if (!state.voucherCatalog.length) {
+    state.selectedVoucherCatalogIndex = null;
+    listNode.innerHTML =
+      '<div class="muted">No vouchers found in catalog.</div>';
+  } else {
+    if (previousVoucherId) {
+      const kept = state.voucherCatalog.find(
+        (entry) => entry.center_id === previousVoucherId,
+      );
+      state.selectedVoucherCatalogIndex = kept ? kept.index : null;
+    }
+
+    if (
+      !state.selectedVoucherCatalogIndex ||
+      !state.voucherCatalog.some(
+        (entry) => entry.index === state.selectedVoucherCatalogIndex,
+      )
+    ) {
+      state.selectedVoucherCatalogIndex = state.voucherCatalog[0].index;
+    }
+
+    const onSelect = (index) => {
+      state.selectedVoucherCatalogIndex = index;
+      renderCardList(
+        "voucherCatalogList",
+        state.voucherCatalog,
+        state.selectedVoucherCatalogIndex,
+        onSelect,
+      );
+    };
+
+    renderCardList(
+      "voucherCatalogList",
+      state.voucherCatalog,
+      state.selectedVoucherCatalogIndex,
+      onSelect,
+    );
+  }
+
+  if (!state.voucherOwned.length) {
+    ownedNode.innerHTML =
+      '<div class="muted">No vouchers unlocked in this save.</div>';
+  } else {
+    renderCardList("voucherOwnedList", state.voucherOwned, null, () => {});
+  }
+
+  const catalogStatsNode = el("voucherCatalogStats");
+  if (catalogStatsNode) {
+    catalogStatsNode.textContent = `Voucher pool: ${state.voucherCatalog.length} total`;
+  }
+
+  const ownedStatsNode = el("voucherOwnedStats");
+  if (ownedStatsNode) {
+    ownedStatsNode.textContent = `Unlocked: ${state.voucherOwned.length}/${state.voucherCatalog.length}`;
+  }
+}
+
+async function refreshConsumeableCatalog() {
+  const groupSelect = el("consumeableSetSelect");
+  const listNode = el("consumeableCatalogList");
+  if (!groupSelect || !listNode) {
+    return;
+  }
+
+  const setKey = normalizeConsumeableSetKey(groupSelect.value || "tarot");
+  const payload = await api(
+    `/api/consumeables/catalog?set=${encodeURIComponent(setKey)}`,
+  );
+  state.consumeableCatalog = consumeableCatalogToVisualItems(
+    payload.items || [],
+  );
+
+  if (!state.consumeableCatalog.length) {
+    state.selectedConsumeableCatalogIndex = null;
+    listNode.innerHTML =
+      '<div class="muted">No cards available in this pool.</div>';
+  } else {
+    if (
+      !state.selectedConsumeableCatalogIndex ||
+      !state.consumeableCatalog.some(
+        (entry) => entry.index === state.selectedConsumeableCatalogIndex,
+      )
+    ) {
+      state.selectedConsumeableCatalogIndex = state.consumeableCatalog[0].index;
+    }
+
+    const onSelect = (index) => {
+      state.selectedConsumeableCatalogIndex = index;
+      renderCardList(
+        "consumeableCatalogList",
+        state.consumeableCatalog,
+        state.selectedConsumeableCatalogIndex,
+        onSelect,
+      );
+    };
+
+    renderCardList(
+      "consumeableCatalogList",
+      state.consumeableCatalog,
+      state.selectedConsumeableCatalogIndex,
+      onSelect,
+    );
+  }
+
+  const statNode = el("consumeablePoolStats");
+  if (statNode) {
+    statNode.textContent = `Showing ${state.consumeableCatalog.length} ${consumeableSetLabel(setKey)}`;
+  }
+}
+
+async function refreshOwnedConsumeables() {
+  const listNode = el("consumeableOwnedList");
+  if (!listNode) {
+    return;
+  }
+
+  const payload = await api("/api/cards?area=consumeables");
+  state.consumeableOwned = payload.items || [];
+
+  if (!state.consumeableOwned.length) {
+    listNode.innerHTML =
+      '<div class="muted">No consumables in this save.</div>';
+  } else {
+    renderCardList(
+      "consumeableOwnedList",
+      state.consumeableOwned,
+      null,
+      () => {},
+    );
+  }
+
+  const statNode = el("consumeableOwnedStats");
+  if (statNode) {
+    statNode.textContent = `Current consumables: ${state.consumeableOwned.length}`;
+  }
+}
+
 async function refreshAll() {
+  await loadAssetManifest();
   await loadCatalog();
   await refreshDashboard();
   await refreshJokers();
   await refreshCards();
   await refreshBackupHistory();
+  await refreshVoucherCatalog();
+  await refreshConsumeableCatalog();
+  await refreshOwnedConsumeables();
 }
 
 async function preview(area, cardIndex, prefix, outputId) {
@@ -606,10 +1033,17 @@ async function apply(area, cardIndex, prefix) {
     body: JSON.stringify(payload),
   });
   const targetCount = previewData.preview?.target_count || 1;
-  const ok = window.confirm(
-    `Apply changes to ${targetCount} card(s)?\n\n` +
-      JSON.stringify(previewData.preview, null, 2),
-  );
+  const ok = await showConfirmDialog({
+    title: "Apply Changes",
+    message: "Are you sure you want to apply these updates?",
+    details: [
+      `Target cards: ${targetCount}`,
+      `Scope: ${formatApplyScope(payload.apply_scope)}`,
+    ],
+    confirmText: "Apply",
+    cancelText: "Cancel",
+    tone: "warning",
+  });
   if (!ok) {
     return;
   }
@@ -617,7 +1051,7 @@ async function apply(area, cardIndex, prefix) {
     method: "POST",
     body: JSON.stringify(payload),
   });
-  toast("Changes applied");
+  toast(`Applied successfully to ${targetCount} card(s)`);
 }
 
 function compactModifierPreview(modifierPreview) {
@@ -729,7 +1163,6 @@ async function previewCardEditor(area, cardIndex) {
     identity_and_enhancement: compactTransformPreview(transformPreview),
     validation_errors: modifierResponse.validation_errors || [],
   };
-  el("cardPreview").textContent = JSON.stringify(combined, null, 2);
   return combined;
 }
 
@@ -752,10 +1185,18 @@ async function applyCardEditor(area, cardIndex) {
   const modifierTargets = combinedPreview.card_properties?.target_count || 1;
   const transformTargets =
     combinedPreview.identity_and_enhancement?.target_count || 0;
-  const ok = window.confirm(
-    `Apply changes?\n- Modifiers: ${modifierTargets} card(s)\n- Transform: ${transformTargets} card(s)\n\n` +
-      JSON.stringify(combinedPreview, null, 2),
-  );
+  const ok = await showConfirmDialog({
+    title: "Apply Card Changes",
+    message: "Confirm to apply selected card updates.",
+    details: [
+      `Card properties: ${hasModifier ? `${modifierTargets} card(s)` : "No changes"}`,
+      `Identity/Enhancement: ${hasTransform ? `${transformTargets} card(s)` : "No changes"}`,
+      `Scope: ${formatApplyScope(modifierPayload.apply_scope)}`,
+    ],
+    confirmText: "Apply",
+    cancelText: "Cancel",
+    tone: "warning",
+  });
   if (!ok) {
     return;
   }
@@ -774,7 +1215,13 @@ async function applyCardEditor(area, cardIndex) {
     });
   }
 
-  toast("Changes applied");
+  const modifierSummary = hasModifier
+    ? `${modifierTargets} properties`
+    : "0 properties";
+  const transformSummary = hasTransform
+    ? `${transformTargets} transforms`
+    : "0 transforms";
+  toast(`Applied: ${modifierSummary}, ${transformSummary}`);
 }
 
 async function saveChanges() {
@@ -826,7 +1273,7 @@ function numberValue(id) {
 }
 
 function bindEvents() {
-  document.querySelectorAll(".nav-btn").forEach((btn) => {
+  document.querySelectorAll(".nav-btn[data-view]").forEach((btn) => {
     btn.addEventListener("click", () => setActiveView(btn.dataset.view));
   });
 
@@ -964,19 +1411,6 @@ function bindEvents() {
     }
   });
 
-  el("previewJokerBtn").addEventListener("click", async () => {
-    try {
-      await preview(
-        "jokers",
-        state.selectedJokerIndex,
-        "joker",
-        "jokerPreview",
-      );
-    } catch (err) {
-      toast(err.message, true);
-    }
-  });
-
   el("applyJokerBtn").addEventListener("click", async () => {
     try {
       await apply("jokers", state.selectedJokerIndex, "joker");
@@ -1016,7 +1450,6 @@ function bindEvents() {
         body: JSON.stringify({
           center_id: centerId,
           edition: el("addJokerEdition").value || null,
-          seal: el("addJokerSeal").value || null,
           stickers: readStickerChecks(el("addJokerStickers")),
         }),
       });
@@ -1042,17 +1475,6 @@ function bindEvents() {
     state.selectedCardIndex = null;
     try {
       await refreshCards();
-    } catch (err) {
-      toast(err.message, true);
-    }
-  });
-
-  el("previewCardBtn").addEventListener("click", async () => {
-    try {
-      await previewCardEditor(
-        el("cardAreaSelect").value,
-        state.selectedCardIndex,
-      );
     } catch (err) {
       toast(err.message, true);
     }
@@ -1089,6 +1511,126 @@ function bindEvents() {
       toast(err.message, true);
     }
   });
+
+  const consumeableSetSelect = el("consumeableSetSelect");
+  if (consumeableSetSelect) {
+    consumeableSetSelect.addEventListener("change", async () => {
+      state.selectedConsumeableCatalogIndex = null;
+      try {
+        await refreshConsumeableCatalog();
+      } catch (err) {
+        toast(err.message, true);
+      }
+    });
+  }
+
+  const refreshConsumeablePoolBtn = el("refreshConsumeablePoolBtn");
+  if (refreshConsumeablePoolBtn) {
+    refreshConsumeablePoolBtn.addEventListener("click", async () => {
+      try {
+        await refreshConsumeableCatalog();
+      } catch (err) {
+        toast(err.message, true);
+      }
+    });
+  }
+
+  const refreshVoucherBtn = el("refreshVoucherBtn");
+  if (refreshVoucherBtn) {
+    refreshVoucherBtn.addEventListener("click", async () => {
+      try {
+        await refreshVoucherCatalog();
+      } catch (err) {
+        toast(err.message, true);
+      }
+    });
+  }
+
+  const refreshConsumeablesBtn = el("refreshConsumeablesBtn");
+  if (refreshConsumeablesBtn) {
+    refreshConsumeablesBtn.addEventListener("click", async () => {
+      try {
+        await refreshOwnedConsumeables();
+      } catch (err) {
+        toast(err.message, true);
+      }
+    });
+  }
+
+  const addConsumeableBtn = el("addConsumeableBtn");
+  if (addConsumeableBtn) {
+    addConsumeableBtn.addEventListener("click", async () => {
+      try {
+        const selected = state.consumeableCatalog.find(
+          (entry) => entry.index === state.selectedConsumeableCatalogIndex,
+        );
+        if (!selected) {
+          toast("Select a consumable card first", "warning");
+          return;
+        }
+
+        const data = await api("/api/consumeables/add", {
+          method: "POST",
+          body: JSON.stringify({ center_id: selected.center_id }),
+        });
+
+        await refreshOwnedConsumeables();
+        if (
+          el("cardAreaSelect") &&
+          el("cardAreaSelect").value === "consumeables"
+        ) {
+          await refreshCards();
+        }
+        toast(data.message || `Added consumable: ${selected.center_name}`);
+      } catch (err) {
+        toast(err.message, true);
+      }
+    });
+  }
+
+  const unlockVoucherBtn = el("unlockVoucherBtn");
+  if (unlockVoucherBtn) {
+    unlockVoucherBtn.addEventListener("click", async () => {
+      try {
+        const selectedVoucher = state.voucherCatalog.find(
+          (entry) => entry.index === state.selectedVoucherCatalogIndex,
+        );
+        if (!selectedVoucher) {
+          toast("Select a voucher first", "warning");
+          return;
+        }
+
+        const data = await api("/api/voucher/set", {
+          method: "POST",
+          body: JSON.stringify({
+            voucher_key: selectedVoucher.center_id,
+            enabled: true,
+          }),
+        });
+
+        await refreshVoucherCatalog();
+        toast(data.message || "Voucher updated");
+      } catch (err) {
+        toast(err.message, true);
+      }
+    });
+  }
+
+  const unlockAllVouchersBtn = el("unlockAllVouchersBtn");
+  if (unlockAllVouchersBtn) {
+    unlockAllVouchersBtn.addEventListener("click", async () => {
+      try {
+        const data = await api("/api/god-mode", {
+          method: "POST",
+          body: JSON.stringify({ action: "unlock_vouchers" }),
+        });
+        await refreshVoucherCatalog();
+        toast(data.message || "Unlocked all vouchers");
+      } catch (err) {
+        toast(err.message, true);
+      }
+    });
+  }
 
   document.querySelectorAll(".cheat-btn").forEach((button) => {
     button.addEventListener("click", async () => {
