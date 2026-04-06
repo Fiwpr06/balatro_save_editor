@@ -123,6 +123,10 @@ def create_app():
     def index():
         return render_template('index.html')
 
+    @app.get('/collection-editor')
+    def collection_editor():
+        return render_template('collection_editor.html')
+
     @app.get('/core-assets/<path:relative_path>')
     def core_assets(relative_path):
         uid = session.get('uid')
@@ -326,6 +330,92 @@ def create_app():
         except Exception as exc:
             return _error('Failed to list cards.', status=500, details=str(exc))
 
+    @app.get('/api/consumeables/catalog')
+    def list_consumeable_catalog():
+        service, err = _require_service()
+        if err:
+            return err
+
+        set_name = request.args.get('set')
+        try:
+            return _ok({'items': service.list_consumeable_catalog(set_name=set_name)})
+        except ValueError as exc:
+            return _error(str(exc), status=422)
+        except Exception as exc:
+            return _error('Failed to load consumable catalog.', status=500, details=str(exc))
+
+    @app.post('/api/consumeables/add')
+    def add_consumeable():
+        service, err = _require_service()
+        if err:
+            return err
+
+        payload, err = _required_json('center_id')
+        if err:
+            return err
+
+        center_id = (payload.get('center_id') or '').strip()
+        if not center_id:
+            return _error('center_id is required.', status=422)
+
+        try:
+            result = service.add_consumeable(center_id)
+            item = result.get('new_item') or {}
+            display_name = item.get('center_name') or center_id
+            return _ok(
+                {
+                    'new_key': result.get('new_key'),
+                    'new_item': item,
+                    'message': f'Added consumable: {display_name}.',
+                }
+            )
+        except ValueError as exc:
+            return _error(str(exc), status=422)
+        except Exception as exc:
+            return _error('Failed to add consumable.', status=500, details=str(exc))
+
+    @app.get('/api/vouchers')
+    def list_vouchers():
+        service, err = _require_service()
+        if err:
+            return err
+
+        try:
+            return _ok({'items': service.list_voucher_catalog()})
+        except Exception as exc:
+            return _error('Failed to load vouchers.', status=500, details=str(exc))
+
+    @app.post('/api/voucher/set')
+    def set_voucher():
+        service, err = _require_service()
+        if err:
+            return err
+
+        payload, err = _required_json('voucher_key')
+        if err:
+            return err
+
+        voucher_key = (payload.get('voucher_key') or '').strip()
+        if not voucher_key:
+            return _error('voucher_key is required.', status=422)
+
+        enabled_raw = payload.get('enabled', True)
+        if isinstance(enabled_raw, bool):
+            enabled = enabled_raw
+        elif isinstance(enabled_raw, str):
+            enabled = enabled_raw.strip().lower() in {'1', 'true', 'yes', 'on'}
+        else:
+            enabled = bool(enabled_raw)
+
+        try:
+            result = service.set_voucher_enabled(voucher_key, enabled=enabled)
+            status_text = 'Unlocked' if result['enabled'] else 'Locked'
+            return _ok({'item': result, 'message': f"{status_text} voucher: {result['name']}."})
+        except ValueError as exc:
+            return _error(str(exc), status=422)
+        except Exception as exc:
+            return _error('Failed to update voucher.', status=500, details=str(exc))
+
     @app.post('/api/card/preview')
     def preview_card():
         service, err = _require_service()
@@ -337,14 +427,14 @@ def create_app():
             area = _parse_area(payload.get('area'))
             card_index = _parse_positive_int(payload.get('card_index'), 'card_index')
             apply_scope = _parse_apply_scope(payload.get('apply_scope'))
-            edition = payload.get('edition')
-            seal = payload.get('seal')
+            has_edition = 'edition' in payload
+            has_seal = 'seal' in payload
+            edition = payload.get('edition') if has_edition else None
+            seal = payload.get('seal') if has_seal else None
             stickers = payload.get('stickers') or {}
 
-            if edition == '':
-                edition = None
-            if seal == '':
-                seal = None
+            if not has_edition and not has_seal and not stickers:
+                return _ok({'preview': {'scope': apply_scope, 'target_count': 0, 'samples': []}, 'validation_errors': []})
 
             errors = service.validate_card_modification(area, card_index, edition=edition, seal=seal, stickers=stickers)
             preview = service.get_card_modification_preview_scoped(
@@ -372,16 +462,13 @@ def create_app():
             area = _parse_area(payload.get('area'))
             card_index = _parse_positive_int(payload.get('card_index'), 'card_index')
             apply_scope = _parse_apply_scope(payload.get('apply_scope'))
-            edition = payload.get('edition')
-            seal = payload.get('seal')
+            has_edition = 'edition' in payload
+            has_seal = 'seal' in payload
+            edition = payload.get('edition') if has_edition else None
+            seal = payload.get('seal') if has_seal else None
             stickers = payload.get('stickers') or {}
 
-            if edition == '':
-                edition = None
-            if seal == '':
-                seal = None
-
-            if edition is None and seal is None and not stickers:
+            if not has_edition and not has_seal and not stickers:
                 return _ok({'changed': {'scope': apply_scope, 'target_count': 0, 'changed': 0}})
 
             errors = service.validate_card_modification(area, card_index, edition=edition, seal=seal, stickers=stickers)
@@ -413,18 +500,19 @@ def create_app():
             area = _parse_area(payload.get('area'))
             card_index = _parse_positive_int(payload.get('card_index'), 'card_index')
             apply_scope = _parse_apply_scope(payload.get('apply_scope'))
-            suit = payload.get('suit')
-            rank = payload.get('rank')
-            enhancement = payload.get('enhancement')
+            has_suit = 'suit' in payload
+            has_rank = 'rank' in payload
+            has_enhancement = 'enhancement' in payload
+            suit = payload.get('suit') if has_suit else None
+            rank = payload.get('rank') if has_rank else None
+            enhancement = payload.get('enhancement') if has_enhancement else None
 
             if suit == '':
                 suit = None
             if rank == '':
                 rank = None
-            if enhancement == '':
-                enhancement = None
 
-            if suit is None and rank is None and enhancement is None:
+            if not has_suit and not has_rank and not has_enhancement:
                 return _ok({'preview': {'scope': apply_scope, 'target_count': 0, 'samples': []}})
 
             preview = service.preview_card_transform_scoped(
@@ -452,18 +540,19 @@ def create_app():
             area = _parse_area(payload.get('area'))
             card_index = _parse_positive_int(payload.get('card_index'), 'card_index')
             apply_scope = _parse_apply_scope(payload.get('apply_scope'))
-            suit = payload.get('suit')
-            rank = payload.get('rank')
-            enhancement = payload.get('enhancement')
+            has_suit = 'suit' in payload
+            has_rank = 'rank' in payload
+            has_enhancement = 'enhancement' in payload
+            suit = payload.get('suit') if has_suit else None
+            rank = payload.get('rank') if has_rank else None
+            enhancement = payload.get('enhancement') if has_enhancement else None
 
             if suit == '':
                 suit = None
             if rank == '':
                 rank = None
-            if enhancement == '':
-                enhancement = None
 
-            if suit is None and rank is None and enhancement is None:
+            if not has_suit and not has_rank and not has_enhancement:
                 return _ok({'changed': {'scope': apply_scope, 'target_count': 0, 'changed': 0}})
 
             changed = service.apply_card_transform_scoped(
@@ -704,6 +793,36 @@ def create_app():
             if action == 'unlock_vouchers':
                 acted = service.unlock_all_vouchers()
                 return _ok({'message': f'Unlocked {acted} vouchers.'})
+            if action == 'add_tarots':
+                result = service.god_add_tarots()
+                return _ok(
+                    {
+                        'message': (
+                            f"Added {result['added']} Tarot card(s) "
+                            f"({result['already_present']} already present)."
+                        )
+                    }
+                )
+            if action == 'add_planets':
+                result = service.god_add_planets()
+                return _ok(
+                    {
+                        'message': (
+                            f"Added {result['added']} Planet card(s) "
+                            f"({result['already_present']} already present)."
+                        )
+                    }
+                )
+            if action == 'add_spectrals':
+                result = service.god_add_spectrals()
+                return _ok(
+                    {
+                        'message': (
+                            f"Added {result['added']} Spectral card(s) "
+                            f"({result['already_present']} already present)."
+                        )
+                    }
+                )
             if action == 'unlock_everything':
                 service.god_unlock_everything()
                 return _ok({'message': 'Unlock everything applied.'})
